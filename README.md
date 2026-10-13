@@ -93,7 +93,7 @@ The caller persists `ReviewState` and supplies UTC epoch seconds to `review::sch
 
 ## Features and verification
 
-GitHub Actions runs formatting, Clippy (with warnings treated as errors), all-feature tests, and a build without default features on pull requests and pushes to `main`. The Stockfish integration tests remain opt-in.
+GitHub Actions runs formatting, Clippy (with warnings treated as errors), all-feature tests, and a build without default features on pull requests and all pushes. The Stockfish integration tests remain opt-in.
 
 - `uci` (default): Tokio subprocess adapter. Disable default features to provide your own `Engine`.
 - `openapi`: optional schema generation with chess-prefixed type names.
