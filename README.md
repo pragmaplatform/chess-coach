@@ -15,11 +15,11 @@ The crate provides:
 
 ## Getting started
 
-Requires Rust 1.88 or newer. Before the first crates.io release, depend on this Git repository:
+Requires Rust 1.88 or newer. Add the crate to your dependencies:
 
 ```toml
 [dependencies]
-chess-coach = { git = "https://github.com/pragmaplatform/chess-coach" }
+chess-coach = "0.1.0"
 ```
 
 Replay a game and extract the player's opening decisions without running an engine:
@@ -93,7 +93,7 @@ The caller persists `ReviewState` and supplies UTC epoch seconds to `review::sch
 
 ## Features and verification
 
-GitHub Actions runs formatting, Clippy (with warnings treated as errors), all-feature tests, and a build without default features on pull requests and all pushes. The Stockfish integration tests remain opt-in.
+GitHub Actions runs formatting, Clippy (with warnings treated as errors), all-feature tests, and a build without default features on all pushes. The Stockfish integration tests remain opt-in.
 
 - `uci` (default): Tokio subprocess adapter. Disable default features to provide your own `Engine`.
 - `openapi`: optional schema generation with chess-prefixed type names.
