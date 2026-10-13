@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 
 use chess_coach::{
     Error,
-    analysis::{AnalysisPolicy, Severity, analyze_game},
+    analysis::{AnalysisPolicy, OpeningThreshold, Severity, analyze_game},
     engine::{Engine, EngineProfile, Evaluation, EvaluationConfidence, EvaluationRequest, MoveEvaluation, Score},
     game::{Color, Game, decisions},
     practice::{self, Exercise, Grade, Objective},
@@ -238,12 +238,13 @@ async fn cloud_comparisons_skip_local_work_or_confirm_both_moves_together() {
 async fn opening_preferences_are_excluded_for_both_colors_through_move_five() {
     struct OpeningEngine {
         decisions: Vec<chess_coach::game::Decision>,
+        played_cp: i32,
     }
     #[async_trait::async_trait]
     impl Engine for OpeningEngine {
         async fn evaluate(&mut self, request: &EvaluationRequest) -> Result<Evaluation, Error> {
             if let Some(uci) = &request.root_move {
-                return Ok(evaluation(uci, -86));
+                return Ok(evaluation(uci, self.played_cp));
             }
             let decision = self.decisions.iter().find(|d| d.position == request.position).unwrap();
             let board = chess_coach::game::board(&request.position)?;
@@ -261,47 +262,53 @@ async fn opening_preferences_are_excluded_for_both_colors_through_move_five() {
             Ok(evaluation(&alternative.unwrap(), 0))
         }
     }
-    for color in [Color::White, Color::Black] {
-        let game = Game {
-            id: "opening-cutoff".into(),
-            moves_san: "e4 e5 Nf3 Nc6 Bb5 a6 Ba4 Nf6 O-O Be7 Re1 b5".into(),
-            player_color: color,
-        };
-        let mut engine = OpeningEngine {
-            decisions: decisions(&game, 15).unwrap(),
-        };
-        let mut policy = policy();
-        policy.opening_threshold = Some(Default::default());
-        let observations = analyze_game(&game, &policy, &mut engine).await.unwrap();
-        for observation in &observations {
-            assert!(observation.loss > 0.05 && observation.loss < 0.10);
-            assert_eq!(observation.mistake, observation.decision.ply > 10);
-            let exercise = Exercise {
-                position: observation.decision.position.clone(),
-                best: observation.best.clone(),
-                acceptable_loss: policy.acceptable_loss,
-                minimum_loss: Some(policy.minimum_loss),
-                opening_threshold: policy.opening_threshold,
-                confidence: observation.confidence,
-                objective: Objective::BestMove,
+    for played_cp in [-86, -500] {
+        for color in [Color::White, Color::Black] {
+            let game = Game {
+                id: "opening-cutoff".into(),
+                moves_san: "e4 e5 Nf3 Nc6 Bb5 a6 Ba4 Nf6 O-O Be7 Re1 b5".into(),
+                player_color: color,
             };
-            let feedback = practice::grade(
-                &exercise,
-                &observation.decision.played_uci,
-                observation.played.clone(),
-                false,
-            )
-            .unwrap();
-            assert_eq!(
-                feedback.grade,
-                if observation.mistake {
-                    Grade::Incorrect
-                } else {
-                    Grade::Good
+            let mut engine = OpeningEngine {
+                decisions: decisions(&game, 15).unwrap(),
+                played_cp,
+            };
+            let mut policy = policy();
+            policy.opening_threshold = Some(Default::default());
+            let observations = analyze_game(&game, &policy, &mut engine).await.unwrap();
+            for observation in &observations {
+                assert!(observation.loss > 0.05);
+                if played_cp == -500 {
+                    assert!(observation.loss > 0.15);
                 }
-            );
+                assert_eq!(observation.mistake, observation.decision.ply > 10);
+                let exercise = Exercise {
+                    position: observation.decision.position.clone(),
+                    best: observation.best.clone(),
+                    acceptable_loss: policy.acceptable_loss,
+                    minimum_loss: Some(policy.minimum_loss),
+                    opening_threshold: policy.opening_threshold,
+                    confidence: observation.confidence,
+                    objective: Objective::BestMove,
+                };
+                let feedback = practice::grade(
+                    &exercise,
+                    &observation.decision.played_uci,
+                    observation.played.clone(),
+                    false,
+                )
+                .unwrap();
+                assert_eq!(
+                    feedback.grade,
+                    if observation.loss >= exercise.minimum_loss().unwrap() {
+                        Grade::Incorrect
+                    } else {
+                        Grade::Good
+                    }
+                );
+            }
+            assert_eq!(ranking::aggregate(&observations, 1).weaknesses.len(), 1);
         }
-        assert_eq!(ranking::aggregate(&observations, 1).weaknesses.len(), 1);
     }
 }
 
@@ -344,9 +351,97 @@ async fn early_opening_threshold_drives_local_and_cloud_verification() {
         .unwrap();
         assert!(engine.local.scores.is_empty());
         assert_eq!(observations[0].profile.nodes, 5000);
-        assert!(observations[0].mistake);
+        assert!(!observations[0].mistake);
         assert_eq!(observations[0].confidence, EvaluationConfidence::Confirmed);
     }
+}
+
+#[tokio::test]
+async fn early_bf4_is_excluded_while_legacy_policies_keep_their_cutoff() {
+    struct Bf4Engine;
+    #[async_trait::async_trait]
+    impl Engine for Bf4Engine {
+        async fn evaluate(&mut self, request: &EvaluationRequest) -> Result<Evaluation, Error> {
+            if request.position.history_uci.is_empty() {
+                return Ok(evaluation("d2d4", 0));
+            }
+            if request.root_move.is_some() {
+                let mut played = evaluation("c1f4", -64);
+                played.line = ["c1f4", "c5d4", "c2c3", "d4c3", "b1c3"].map(String::from).to_vec();
+                Ok(played)
+            } else {
+                Ok(evaluation("d4d5", 62))
+            }
+        }
+    }
+    let game = Game {
+        id: "early-bf4".into(),
+        moves_san: "d4 c5 Bf4".into(),
+        player_color: Color::White,
+    };
+    let legacy: OpeningThreshold = serde_json::from_str(r#"{"full_moves":5,"minimum_loss":0.10}"#).unwrap();
+    assert!(!legacy.mates_only);
+    for (threshold, eligible) in [
+        (Some(OpeningThreshold::default()), false),
+        (Some(legacy), true),
+        (None, true),
+    ] {
+        let mut policy = policy();
+        policy.opening_threshold = threshold;
+        // Persisting and reloading must keep the policy's selection behavior.
+        let policy = serde_json::from_value(serde_json::to_value(policy).unwrap()).unwrap();
+        let observations = analyze_game(&game, &policy, &mut Bf4Engine).await.unwrap();
+        let bf4 = &observations[1];
+        assert!((bf4.loss - 0.1154).abs() < 0.0001);
+        assert_eq!(bf4.confidence, EvaluationConfidence::Confirmed);
+        assert!(bf4.teaching.as_ref().unwrap().themes.contains(&Theme::MaterialLoss));
+        assert_eq!(bf4.mistake, eligible);
+        assert_eq!(
+            ranking::aggregate(&observations, 1).weaknesses.len(),
+            usize::from(eligible)
+        );
+    }
+}
+
+#[tokio::test]
+async fn early_allowed_mate_remains_eligible() {
+    struct MateEngine;
+    #[async_trait::async_trait]
+    impl Engine for MateEngine {
+        async fn evaluate(&mut self, request: &EvaluationRequest) -> Result<Evaluation, Error> {
+            if request.position.history_uci.is_empty() {
+                return Ok(evaluation("f2f3", 0));
+            }
+            let mut value = evaluation(request.root_move.as_deref().unwrap_or("e2e4"), 0);
+            if request.root_move.is_some() {
+                value.score = Score::Mate(-1);
+                value.line.push("d8h4".into());
+            }
+            Ok(value)
+        }
+    }
+    let mut policy = policy();
+    policy.opening_threshold = Some(Default::default());
+    let observations = analyze_game(
+        &Game {
+            id: "allowed-mate".into(),
+            moves_san: "f3 e5 g4".into(),
+            player_color: Color::White,
+        },
+        &policy,
+        &mut MateEngine,
+    )
+    .await
+    .unwrap();
+    let allowed = &observations[1];
+    assert!(allowed.mistake);
+    assert_eq!(allowed.confidence, EvaluationConfidence::Confirmed);
+    let report = ranking::aggregate(&observations, 1);
+    assert_eq!(report.weaknesses.len(), 1);
+    assert_eq!(
+        Objective::from_themes(&report.weaknesses[0].themes),
+        Objective::AvoidMate
+    );
 }
 
 #[test]

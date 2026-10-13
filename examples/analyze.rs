@@ -13,7 +13,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let executable = args.next().ok_or("usage: analyze /path/to/stockfish game.json")?;
     let game: Game = serde_json::from_slice(&std::fs::read(args.next().ok_or("missing game.json")?)?)?;
     let policy = AnalysisPolicy {
-        version: "openingcoach-logistic-v4".into(),
+        version: "openingcoach-logistic-v5".into(),
         full_moves: 15,
         minimum_loss: 0.05,
         opening_threshold: Some(Default::default()),

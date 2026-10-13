@@ -16,7 +16,7 @@ pub struct AnalysisPolicy {
     pub version: String,
     pub full_moves: u16,
     pub minimum_loss: f64,
-    /// Higher cutoff for early opening preferences; absent in older policies.
+    /// Early-opening eligibility and loss cutoff; absent in older policies.
     #[serde(default)]
     pub opening_threshold: Option<OpeningThreshold>,
     pub acceptable_loss: f64,
@@ -36,6 +36,10 @@ pub struct AnalysisPolicy {
 pub struct OpeningThreshold {
     pub full_moves: u16,
     pub minimum_loss: f64,
+    /// Exclude non-mating lessons through `full_moves`, regardless of loss.
+    /// Missing in older serialized policies, which retain loss-based eligibility.
+    #[serde(default)]
+    pub mates_only: bool,
 }
 
 impl Default for OpeningThreshold {
@@ -43,11 +47,16 @@ impl Default for OpeningThreshold {
         Self {
             full_moves: 5,
             minimum_loss: 0.10,
+            mates_only: true,
         }
     }
 }
 
 impl OpeningThreshold {
+    pub fn excludes_non_mating(&self, position: &Position) -> bool {
+        self.mates_only && position.history_uci.len() < usize::from(self.full_moves) * 2
+    }
+
     pub fn minimum_loss(&self, position: &Position, baseline: f64) -> f64 {
         if position.history_uci.len() < usize::from(self.full_moves) * 2 {
             baseline.max(self.minimum_loss)
@@ -205,6 +214,9 @@ pub async fn analyze_game(
             .themes
             .iter()
             .any(|theme| matches!(theme, Theme::MissedMate | Theme::AllowedMate));
+        let excluded = policy
+            .opening_threshold
+            .is_some_and(|threshold| threshold.excludes_non_mating(&decision.position));
         observations.push(Observation {
             decision,
             best: comparison.best,
@@ -214,7 +226,7 @@ pub async fn analyze_game(
             confidence: comparison.confidence,
             teaching: Some(teaching),
             severity: if conclusive { Severity::from_loss(loss) } else { None },
-            mistake: conclusive && (loss >= minimum_loss || tactical_lesson),
+            mistake: conclusive && (tactical_lesson || (!excluded && loss >= minimum_loss)),
             cloud_evaluations,
         });
     }

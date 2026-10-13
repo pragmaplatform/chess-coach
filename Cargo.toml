@@ -1,6 +1,6 @@
 [package]
 name = "chess-coach"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 rust-version = "1.88"
 license = "MIT"
@@ -10,7 +10,7 @@ homepage = "https://chess.player.gg"
 repository = "https://github.com/pragmaplatform/chess-coach"
 keywords = ["chess", "stockfish", "uci", "training", "spaced-repetition"]
 categories = ["games"]
-include = ["src/**", "examples/**", "tests/**", "Cargo.toml", "README.md", "LICENSE"]
+include = ["src/**", "examples/**", "tests/**", "Cargo.toml", "README.md", "CHANGELOG.md", "LICENSE"]
 
 [package.metadata.docs.rs]
 all-features = true
