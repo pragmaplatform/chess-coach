@@ -1,0 +1,40 @@
+[package]
+name = "chess-coach"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+license = "MIT"
+description = "Personal opening analysis and spaced-repetition training with UCI chess engines"
+readme = "README.md"
+homepage = "https://chess.player.gg"
+repository = "https://github.com/pragmaplatform/chess-coach"
+keywords = ["chess", "stockfish", "uci", "training", "spaced-repetition"]
+categories = ["games"]
+include = ["src/**", "examples/**", "tests/**", "Cargo.toml", "README.md", "LICENSE"]
+
+[package.metadata.docs.rs]
+all-features = true
+
+[features]
+default = ["uci"]
+openapi = ["dep:utoipa"]
+uci = ["dep:tokio"]
+
+[dependencies]
+async-trait = "0.1"
+cozy-chess = "0.3.4"
+esca = { version = "=0.4.0", features = ["openings"] }
+hex = "0.4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.11"
+thiserror = "2"
+tokio = { version = "1", features = ["io-util", "process", "time"], optional = true }
+utoipa = { version = "6", optional = true }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+
+[[example]]
+name = "analyze"
+required-features = ["uci"]
