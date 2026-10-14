@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     Error,
     analysis::OpeningThreshold,
-    engine::{Evaluation, EvaluationConfidence, MoveEvaluation, Score, loss, terminal_score},
+    engine::{Evaluation, EvaluationConfidence, EvaluationSource, MoveEvaluation, Score, loss, terminal_score},
     game::{self, Position},
     teaching::{self, Teaching, Theme},
 };
@@ -96,42 +96,146 @@ pub struct FollowUpPosition {
     pub setup_san: Vec<String>,
 }
 
-/// Verify a stronger practice search without requiring absolute scores to converge.
-///
-/// Both comparisons must describe this exercise's position/history, engine identity,
-/// and submitted move. Alternative-move recovery requires larger node counts for both
-/// evaluations, matching sources, unchanged mating outcomes, and a final loss more
-/// than one percentage point below the exercise's pass/fail cutoff. It accepts:
-/// - consistently acceptable losses that change by at most two percentage points;
-/// - an earlier borderline loss (within one point of the cutoff) when the submitted
-///   move's evaluation changes by at most two points.
-///
-/// Recovered comparisons are `Unverified`: the grading evidence is sufficient, but
-/// absolute scores did not converge. Copy the returned best/confidence into the
-/// exercise before calling [`grade`]. Lesson discovery should continue using
-/// [`MoveEvaluation::compared_with`].
-pub fn verify_comparison(exercise: &Exercise, current: MoveEvaluation, previous: &MoveEvaluation) -> MoveEvaluation {
-    let mut verified = current.compared_with(previous);
-    if verified.played.best_move != previous.played.best_move || !consistent(&verified) {
-        verified.confidence = EvaluationConfidence::Inconclusive;
-        return verified;
-    }
-    if verified.confidence == EvaluationConfidence::Inconclusive
-        && objective_supported(exercise.objective, verified.best.score)
-        && (verified.best == verified.played || acceptable_alternative(exercise, &verified, previous))
-    {
-        verified.confidence = EvaluationConfidence::Unverified;
-    }
-    verified
+/// Search evidence for one position/history, engine identity, and submitted move.
+/// Keep both searches when verification runs; confidence alone loses the cause of uncertainty.
+#[derive(Clone, Debug)]
+pub enum Evidence {
+    /// A single search pair, not the result of `MoveEvaluation::compared_with`.
+    Search(MoveEvaluation),
+    /// Keep the earlier pair so grading can distinguish score drift from changed mate evidence.
+    Verification {
+        current: MoveEvaluation,
+        previous: MoveEvaluation,
+    },
 }
 
-fn consistent(comparison: &MoveEvaluation) -> bool {
-    MoveEvaluation::new(comparison.best.clone(), comparison.played.clone()).confidence
+impl From<MoveEvaluation> for Evidence {
+    fn from(comparison: MoveEvaluation) -> Self {
+        Self::Search(comparison)
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Uncertainty {
+    /// The submitted evaluation exceeds the root best beyond the ordinary tolerance.
+    ScoreOrdering,
+    /// The searches' centipawn estimates changed beyond the stability tolerance.
+    ScoreDrift,
+    /// A search pair disagrees in a way that involves a mating outcome.
+    MateContradiction,
+    /// The earlier and later searches disagree about a mating outcome.
+    MateChanged,
+    SourceMismatch,
+    SubmittedMoveMismatch,
+    UnsupportedObjective,
+    /// A caller supplied inconclusive confidence without the underlying verification evidence.
+    Unspecified,
+}
+
+#[derive(Clone, Debug)]
+pub struct Assessment {
+    pub comparison: MoveEvaluation,
+    pub uncertainty: Option<Uncertainty>,
+}
+
+/// Assess practice evidence without changing the exercise's saved confidence.
+/// Analysis/lesson discovery should continue using `MoveEvaluation::compared_with`.
+pub fn assess(exercise: &Exercise, evidence: Evidence) -> Assessment {
+    let (mut comparison, mut uncertainty) = match evidence {
+        Evidence::Search(mut current) => {
+            let mut reason = pair_uncertainty(&current).or_else(|| {
+                (current.confidence == EvaluationConfidence::Inconclusive).then_some(Uncertainty::Unspecified)
+            });
+            if reason.is_some()
+                && (current.best == current.played
+                    || (reason == Some(Uncertainty::ScoreOrdering) && winning_mate_escape(exercise, &current)))
+            {
+                current.confidence = EvaluationConfidence::Unverified;
+                reason = None;
+            }
+            (current, reason)
+        }
+        Evidence::Verification { current, previous } => {
+            let reason = verification_uncertainty(&current, &previous);
+            let mut verified = current.compared_with(&previous);
+            let mut reason = reason.or_else(|| {
+                (verified.confidence == EvaluationConfidence::Inconclusive).then_some(Uncertainty::Unspecified)
+            });
+            if matches!(reason, Some(Uncertainty::ScoreOrdering | Uncertainty::ScoreDrift))
+                && (pair_uncertainty(&verified).is_none() || winning_mate_escape(exercise, &verified))
+                && (verified.best == verified.played || acceptable_alternative(exercise, &verified, &previous))
+            {
+                verified.confidence = EvaluationConfidence::Unverified;
+                reason = None;
+            }
+            (verified, reason)
+        }
+    };
+    if !objective_supported(exercise.objective, comparison.best.score) {
+        uncertainty = Some(Uncertainty::UnsupportedObjective);
+    }
+    if uncertainty.is_some() {
+        comparison.confidence = EvaluationConfidence::Inconclusive;
+    }
+    Assessment {
+        comparison,
+        uncertainty,
+    }
+}
+
+fn pair_uncertainty(comparison: &MoveEvaluation) -> Option<Uncertainty> {
+    if MoveEvaluation::new(comparison.best.clone(), comparison.played.clone()).confidence
         != EvaluationConfidence::Inconclusive
+    {
+        None
+    } else if comparison.best.source != comparison.played.source {
+        Some(Uncertainty::SourceMismatch)
+    } else if comparison.best.score.mate_outcome().is_some() || comparison.played.score.mate_outcome().is_some() {
+        Some(Uncertainty::MateContradiction)
+    } else {
+        Some(Uncertainty::ScoreOrdering)
+    }
+}
+
+fn verification_uncertainty(current: &MoveEvaluation, previous: &MoveEvaluation) -> Option<Uncertainty> {
+    if current.played.best_move != previous.played.best_move {
+        Some(Uncertainty::SubmittedMoveMismatch)
+    } else if current.best.source != previous.best.source
+        || current.played.source != previous.played.source
+        || current.best.source != current.played.source
+    {
+        Some(Uncertainty::SourceMismatch)
+    } else if current.best.score.mate_outcome() != previous.best.score.mate_outcome()
+        || current.played.score.mate_outcome() != previous.played.score.mate_outcome()
+    {
+        Some(Uncertainty::MateChanged)
+    } else if pair_uncertainty(current) == Some(Uncertainty::MateContradiction) {
+        Some(Uncertainty::MateContradiction)
+    } else if (current.best.score.probability() - previous.best.score.probability()).abs() > 0.02
+        || (current.played.score.probability() - previous.played.score.probability()).abs() > 0.02
+    {
+        Some(Uncertainty::ScoreDrift)
+    } else {
+        pair_uncertainty(current)
+    }
+}
+
+/// Compatibility helper for callers that copy the returned best/confidence into an exercise.
+/// New integrations should retain `Evidence::Verification` and call `grade_with_evidence`
+/// so a later grading call cannot lose the reason verification was inconclusive.
+pub fn verify_comparison(exercise: &Exercise, current: MoveEvaluation, previous: &MoveEvaluation) -> MoveEvaluation {
+    assess(
+        exercise,
+        Evidence::Verification {
+            current,
+            previous: previous.clone(),
+        },
+    )
+    .comparison
 }
 
 fn acceptable_alternative(exercise: &Exercise, current: &MoveEvaluation, previous: &MoveEvaluation) -> bool {
-    if !consistent(previous)
+    if (pair_uncertainty(previous).is_some() && !winning_mate_escape(exercise, previous))
         || current.best.source != previous.best.source
         || current.best.nodes <= previous.best.nodes
         || current.played.nodes <= previous.played.nodes
@@ -153,26 +257,30 @@ fn acceptable_alternative(exercise: &Exercise, current: &MoveEvaluation, previou
 }
 
 pub fn grade(exercise: &Exercise, submitted_uci: &str, played: Evaluation, assisted: bool) -> Result<Feedback, Error> {
-    game::legal_move(&game::board(&exercise.position)?, submitted_uci)?;
-    if played.best_move != submitted_uci {
-        return Err(Error::Engine("Evaluation is for another move".into()));
-    }
-    if exercise.best.source != played.source {
-        return Err(Error::Engine(
-            "Cannot grade scores from different evaluation sources".into(),
-        ));
-    }
     let mut comparison = MoveEvaluation::new(exercise.best.clone(), played);
     if comparison.confidence != EvaluationConfidence::Inconclusive {
         comparison.confidence = exercise.confidence;
     }
-    if comparison.best == comparison.played && comparison.confidence == EvaluationConfidence::Inconclusive {
-        // The root search itself selected this answer. Absolute score drift does
-        // not make a move worse than itself; do not claim the scores converged.
-        comparison.confidence = EvaluationConfidence::Unverified;
+    grade_with_evidence(exercise, submitted_uci, Evidence::Search(comparison), assisted)
+}
+
+/// Grade raw or verified evidence while retaining the saved exercise and verification context.
+/// Both searches must belong to this exercise's position/history and engine identity.
+pub fn grade_with_evidence(
+    exercise: &Exercise,
+    submitted_uci: &str,
+    evidence: Evidence,
+    assisted: bool,
+) -> Result<Feedback, Error> {
+    game::legal_move(&game::board(&exercise.position)?, submitted_uci)?;
+    let comparison = assess(exercise, evidence).comparison;
+    if comparison.played.best_move != submitted_uci {
+        return Err(Error::Engine("Evaluation is for another move".into()));
     }
-    if !objective_supported(exercise.objective, comparison.best.score) {
-        comparison.confidence = EvaluationConfidence::Inconclusive;
+    if comparison.best.source != comparison.played.source {
+        return Err(Error::Engine(
+            "Cannot grade scores from different evaluation sources".into(),
+        ));
     }
     let loss = loss(comparison.best.score, comparison.played.score);
     let objective_met = match exercise.objective {
@@ -206,6 +314,17 @@ pub fn grade(exercise: &Exercise, submitted_uci: &str, played: Evaluation, assis
         best: comparison.best,
         played: comparison.played,
     })
+}
+
+fn winning_mate_escape(exercise: &Exercise, comparison: &MoveEvaluation) -> bool {
+    exercise.objective == Objective::AvoidMate
+        && exercise.confidence != EvaluationConfidence::Inconclusive
+        && comparison.best.source == EvaluationSource::Stockfish
+        && comparison.played.source == EvaluationSource::Stockfish
+        && matches!((comparison.best.score, comparison.played.score), (Score::Centipawns(_), Score::Centipawns(_)))
+        // Define "clearly winning" using the score model, not a calibrated win probability.
+        && comparison.best.score.probability() >= 0.90
+        && comparison.played.score.is_better_than(comparison.best.score)
 }
 
 fn objective_supported(objective: Objective, best: Score) -> bool {
