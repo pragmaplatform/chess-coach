@@ -1,0 +1,175 @@
+{
+  "exercise": {
+    "best": {
+      "line": [
+        "f5e4",
+        "f3e4",
+        "d8h4",
+        "e1d2",
+        "h4e4",
+        "g1f3",
+        "g8f6",
+        "f1d3",
+        "e4d5",
+        "c2c4",
+        "d5d7",
+        "d2c2",
+        "c6c5",
+        "d1e1",
+        "c5d4",
+        "e3d4"
+      ],
+      "depth": 17,
+      "nodes": 1004654,
+      "score": {
+        "kind": "centipawns",
+        "value": 41
+      },
+      "source": "stockfish",
+      "best_move": "f5e4"
+    },
+    "position": {
+      "fen": "rn1qkbnr/pp3ppp/2p1p3/5b2/3PN3/4BP2/PPP3PP/R2QKBNR b KQkq - 1 6",
+      "key": "rn1qkbnr/pp3ppp/2p1p3/5b2/3PN3/4BP2/PPP3PP/R2QKBNR b KQkq -",
+      "history_uci": [
+        "e2e4",
+        "c7c6",
+        "d2d4",
+        "d7d5",
+        "b1c3",
+        "d5e4",
+        "c3e4",
+        "c8f5",
+        "f2f3",
+        "e7e6",
+        "c1e3"
+      ]
+    },
+    "objective": "best_move",
+    "confidence": "confirmed",
+    "minimum_loss": 0.05,
+    "acceptable_loss": 0.02,
+    "opening_threshold": {
+      "full_moves": 5,
+      "mates_only": true,
+      "minimum_loss": 0.1
+    }
+  },
+  "submitted_uci": "d8a5",
+  "previous": {
+    "best": {
+      "line": [
+        "f5e4",
+        "f3e4",
+        "d8h4",
+        "e1d2",
+        "h4e4",
+        "g1f3",
+        "g8f6",
+        "f1d3",
+        "e4d5",
+        "c2c4",
+        "d5d7",
+        "d2c2",
+        "c6c5",
+        "d1e1",
+        "c5d4",
+        "e3d4"
+      ],
+      "depth": 17,
+      "nodes": 1004654,
+      "score": {
+        "kind": "centipawns",
+        "value": 41
+      },
+      "source": "stockfish",
+      "best_move": "f5e4"
+    },
+    "played": {
+      "line": [
+        "d8a5",
+        "c2c3",
+        "b8d7",
+        "f1d3",
+        "g8f6",
+        "g1e2",
+        "f8e7",
+        "d1b3",
+        "a5c7",
+        "e1c1",
+        "f6d5",
+        "e3f2",
+        "b7b5",
+        "g2g4",
+        "f5g6",
+        "f2g3"
+      ],
+      "depth": 18,
+      "nodes": 1003631,
+      "score": {
+        "kind": "centipawns",
+        "value": -14
+      },
+      "source": "stockfish",
+      "best_move": "d8a5"
+    }
+  },
+  "current": {
+    "best": {
+      "line": [
+        "b8d7",
+        "f1d3",
+        "g8f6",
+        "g1e2",
+        "f8e7",
+        "e1g1",
+        "e8g8",
+        "c2c3",
+        "a7a5",
+        "d1c2",
+        "f5g6",
+        "e3f2",
+        "a5a4",
+        "e2f4",
+        "g6e4",
+        "f3e4"
+      ],
+      "depth": 20,
+      "nodes": 5000978,
+      "score": {
+        "kind": "centipawns",
+        "value": 14
+      },
+      "source": "stockfish",
+      "best_move": "b8d7"
+    },
+    "played": {
+      "line": [
+        "d8a5",
+        "c2c3",
+        "b8d7",
+        "f1d3",
+        "g8f6",
+        "g1e2",
+        "f8e7",
+        "d1b3",
+        "a5c7",
+        "e3f4",
+        "c7b6",
+        "e1c1",
+        "b6b3",
+        "a2b3",
+        "h7h5",
+        "c1c2"
+      ],
+      "depth": 21,
+      "nodes": 5004964,
+      "score": {
+        "kind": "centipawns",
+        "value": -15
+      },
+      "source": "stockfish",
+      "best_move": "d8a5"
+    }
+  }
+}

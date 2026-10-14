@@ -19,7 +19,7 @@ Requires Rust 1.88 or newer. Add the crate to your dependencies:
 
 ```toml
 [dependencies]
-chess-coach = "0.2.0"
+chess-coach = "0.2.1"
 ```
 
 Replay a game and extract the player's opening decisions without running an engine:
@@ -89,12 +89,18 @@ Winning/losing mate scores map to 1/0. These losses rank practice opportunities;
 
 Best and submitted scores must have the same `EvaluationSource`; grading rejects mixed cloud/local comparisons. The application pins cloud variations with the exercise and uses them for clear answers. Missing data and borderline or inconsistent answers fall back to local comparisons, evaluating a new local best as well when the original best came from cloud. Feedback contains the actual pair used to grade. Old evaluations without a source deserialize as Stockfish.
 
+For a stronger practice search, use `practice::verify_comparison(&exercise, stronger, &previous)` instead of `MoveEvaluation::compared_with`. Supply comparisons for the same position/history, submitted move, and engine identity. Copy the returned `best` and `confidence` into the exercise before calling `practice::grade` with its `played` evaluation. The existing `compared_with` rule remains appropriate for discovering lessons, where absolute score stability is required.
+
+Practice verification can recover an acceptable alternative when both evaluations have larger node counts, sources agree, mating outcomes are unchanged, and the final loss is more than one percentage point below the exercise's pass/fail cutoff. Either both losses must be safely acceptable and differ by at most two points, or the earlier loss must be within one point of the cutoff while the submitted move's evaluation stays within two points. For example, a preferred move changing from +0.41 to +0.14 while the submitted move stays at −0.14/−0.15 supports a `good` verdict at the usual five-point cutoff. The captured Caro-Kann `Qa5+` regression covers this case.
+
+`practice::grade` also accepts an exact copy of the root search's selected best evaluation despite inherited score uncertainty, provided the exercise's objective is still supported. Matching the move name alone does not bypass disagreement between evaluations. Recovery uses `confidence: "unverified"`, not `"confirmed"`, because it establishes sufficient grading evidence without claiming absolute score convergence. Frontends should render the result from `grade`; `unverified` is not an inconclusive grade. Assisted answers still receive `assisted`, and invalidated mating objectives remain `inconclusive`.
+
 ## Review scheduling
 
 Enable the optional scheduler in your dependencies:
 
 ```toml
-chess-coach = { version = "0.2.0", features = ["fsrs"] }
+chess-coach = { version = "0.2.1", features = ["fsrs"] }
 ```
 
 Enable `fsrs` to use `review::FsrsScheduler`, backed by the pinned [`fsrs` 6.6.2 release](https://github.com/open-spaced-repetition/fsrs-rs/releases/tag/v6.6.2). It uses FSRS-6 defaults, a 90% desired retention target, and a maximum interval of 36,500 days. Retention is a target to validate on your users, not a guarantee. Lower the maximum interval in `FsrsConfig` if your application needs a shorter horizon. Scheduling is deterministic and uses caller-supplied UTC epoch seconds. There is no random interval fuzz or implicit system clock.
