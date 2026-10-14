@@ -12,7 +12,7 @@ pub mod openings;
 pub mod practice;
 /// Weakness aggregation and practice prioritization.
 pub mod ranking;
-/// Deterministic spaced-repetition scheduling.
+/// Serializable review history and optional FSRS memory scheduling.
 pub mod review;
 /// Explanations supported by the evaluated continuations.
 pub mod teaching;
@@ -26,6 +26,8 @@ pub enum Error {
     InvalidGame(String),
     #[error("Invalid configuration: {0}")]
     Configuration(String),
+    #[error(transparent)]
+    Review(#[from] review::ReviewError),
     #[error("Engine error: {0}")]
     Engine(String),
     #[error("Engine timed out")]

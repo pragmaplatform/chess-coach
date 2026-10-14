@@ -1,0 +1,466 @@
+[
+  {
+    "name": "default",
+    "config": {
+      "version": "fsrs6_v1",
+      "parameters": [
+        0.212,
+        1.2931,
+        2.3065,
+        8.2956,
+        6.4133,
+        0.8334,
+        3.0194,
+        0.001,
+        1.8722,
+        0.1666,
+        0.796,
+        1.4835,
+        0.0614,
+        0.2629,
+        1.6483,
+        0.6014,
+        1.8729,
+        0.5425,
+        0.0912,
+        0.0658,
+        0.1542
+      ],
+      "desired_retention": 0.9,
+      "maximum_interval_days": 36500
+    },
+    "config_id": "a79f65fd1c06fc555f1badd5281fff929b55a0419a857a258ef49a76c0e56e8f",
+    "parameters_id": "ef6bcdc2486db5df2e43e67e4a828b1fb5fb8e1bbbedc2744d4afdfdd3dcfa56",
+    "decay": 0.1542,
+    "initial_state": {
+      "version": "fsrs6_v1",
+      "memory": null,
+      "due_at": 1800000000,
+      "reviews": 0,
+      "lapses": 0,
+      "parameters_id": "ef6bcdc2486db5df2e43e67e4a828b1fb5fb8e1bbbedc2744d4afdfdd3dcfa56",
+      "origin": "new",
+      "legacy": null
+    },
+    "transitions": [
+      {
+        "state": {
+          "version": "fsrs6_v1",
+          "memory": {
+            "memory": {
+              "stability_days": 2.3065,
+              "difficulty": 2.118104
+            },
+            "last_review_at": 1800000000
+          },
+          "due_at": 1800172800,
+          "reviews": 1,
+          "lapses": 0,
+          "parameters_id": "ef6bcdc2486db5df2e43e67e4a828b1fb5fb8e1bbbedc2744d4afdfdd3dcfa56",
+          "origin": "new",
+          "legacy": null
+        },
+        "event": {
+          "at": 1800000000,
+          "rating": "good"
+        },
+        "elapsed_days": 0,
+        "interval_days": 2,
+        "config_id": "a79f65fd1c06fc555f1badd5281fff929b55a0419a857a258ef49a76c0e56e8f"
+      },
+      {
+        "state": {
+          "version": "fsrs6_v1",
+          "memory": {
+            "memory": {
+              "stability_days": 0.7750839,
+              "difficulty": 7.394502
+            },
+            "last_review_at": 1800000000
+          },
+          "due_at": 1800086400,
+          "reviews": 2,
+          "lapses": 1,
+          "parameters_id": "ef6bcdc2486db5df2e43e67e4a828b1fb5fb8e1bbbedc2744d4afdfdd3dcfa56",
+          "origin": "new",
+          "legacy": null
+        },
+        "event": {
+          "at": 1800000000,
+          "rating": "again"
+        },
+        "elapsed_days": 0,
+        "interval_days": 1,
+        "config_id": "a79f65fd1c06fc555f1badd5281fff929b55a0419a857a258ef49a76c0e56e8f"
+      },
+      {
+        "state": {
+          "version": "fsrs6_v1",
+          "memory": {
+            "memory": {
+              "stability_days": 2.4975073,
+              "difficulty": 8.255577
+            },
+            "last_review_at": 1800172800
+          },
+          "due_at": 1800345600,
+          "reviews": 3,
+          "lapses": 1,
+          "parameters_id": "ef6bcdc2486db5df2e43e67e4a828b1fb5fb8e1bbbedc2744d4afdfdd3dcfa56",
+          "origin": "new",
+          "legacy": null
+        },
+        "event": {
+          "at": 1800172800,
+          "rating": "hard"
+        },
+        "elapsed_days": 2,
+        "interval_days": 2,
+        "config_id": "a79f65fd1c06fc555f1badd5281fff929b55a0419a857a258ef49a76c0e56e8f"
+      },
+      {
+        "state": {
+          "version": "fsrs6_v1",
+          "memory": {
+            "memory": {
+              "stability_days": 26.522638,
+              "difficulty": 7.6579003
+            },
+            "last_review_at": 1804060800
+          },
+          "due_at": 1806393600,
+          "reviews": 4,
+          "lapses": 1,
+          "parameters_id": "ef6bcdc2486db5df2e43e67e4a828b1fb5fb8e1bbbedc2744d4afdfdd3dcfa56",
+          "origin": "new",
+          "legacy": null
+        },
+        "event": {
+          "at": 1804060800,
+          "rating": "easy"
+        },
+        "elapsed_days": 45,
+        "interval_days": 27,
+        "config_id": "a79f65fd1c06fc555f1badd5281fff929b55a0419a857a258ef49a76c0e56e8f"
+      }
+    ],
+    "recall_vectors": [
+      {
+        "stability_days": 10.0,
+        "last_review_at": 1800000000,
+        "now": 1800000000,
+        "elapsed_days": 0,
+        "recall": 1.0
+      },
+      {
+        "stability_days": 10.0,
+        "last_review_at": 1800000000,
+        "now": 1800000001,
+        "elapsed_days": 0,
+        "recall": 1.0
+      },
+      {
+        "stability_days": 10.0,
+        "last_review_at": 1800000000,
+        "now": 1800086399,
+        "elapsed_days": 0,
+        "recall": 1.0
+      },
+      {
+        "stability_days": 10.0,
+        "last_review_at": 1800000000,
+        "now": 1800086400,
+        "elapsed_days": 1,
+        "recall": 0.9856824
+      },
+      {
+        "stability_days": 10.0,
+        "last_review_at": 1800000000,
+        "now": 1800086401,
+        "elapsed_days": 1,
+        "recall": 0.9856824
+      },
+      {
+        "stability_days": 10.0,
+        "last_review_at": 1800000000,
+        "now": 1800172799,
+        "elapsed_days": 1,
+        "recall": 0.9856824
+      },
+      {
+        "stability_days": 10.0,
+        "last_review_at": 1800000000,
+        "now": 1800172800,
+        "elapsed_days": 2,
+        "recall": 0.97276956
+      },
+      {
+        "stability_days": 10.0,
+        "last_review_at": 1800000000,
+        "now": 1800864000,
+        "elapsed_days": 10,
+        "recall": 0.9
+      },
+      {
+        "stability_days": 10.0,
+        "last_review_at": 1800000000,
+        "now": 1805184000,
+        "elapsed_days": 60,
+        "recall": 0.74271744
+      },
+      {
+        "stability_days": 0.001,
+        "last_review_at": 1800000000,
+        "now": 1800086400,
+        "elapsed_days": 1,
+        "recall": 0.34566942
+      },
+      {
+        "stability_days": 1.0,
+        "last_review_at": 1800000000,
+        "now": 1802592000,
+        "elapsed_days": 30,
+        "recall": 0.59063333
+      },
+      {
+        "stability_days": 36500.0,
+        "last_review_at": 1800000000,
+        "now": 4953600000,
+        "elapsed_days": 36500,
+        "recall": 0.9
+      }
+    ]
+  },
+  {
+    "name": "custom_decay_retention_and_limit",
+    "config": {
+      "version": "fsrs6_v1",
+      "parameters": [
+        0.212,
+        1.2931,
+        2.3065,
+        8.2956,
+        6.4133,
+        0.8334,
+        3.0194,
+        0.001,
+        1.8722,
+        0.1666,
+        0.796,
+        1.4835,
+        0.0614,
+        0.2629,
+        1.6483,
+        0.6014,
+        1.8729,
+        0.5425,
+        0.0912,
+        0.0658,
+        0.5
+      ],
+      "desired_retention": 0.95,
+      "maximum_interval_days": 30
+    },
+    "config_id": "965805950f23173a02aa5c9e5d681cc71bb0a19f12077084a491224e5ea1d6cf",
+    "parameters_id": "3cec91ddae80b63ff8b6ee5aef193c6fda5e36de895f3e36a767d3fd75855dfe",
+    "decay": 0.5,
+    "initial_state": {
+      "version": "fsrs6_v1",
+      "memory": null,
+      "due_at": 1800000000,
+      "reviews": 0,
+      "lapses": 0,
+      "parameters_id": "3cec91ddae80b63ff8b6ee5aef193c6fda5e36de895f3e36a767d3fd75855dfe",
+      "origin": "new",
+      "legacy": null
+    },
+    "transitions": [
+      {
+        "state": {
+          "version": "fsrs6_v1",
+          "memory": {
+            "memory": {
+              "stability_days": 2.3065,
+              "difficulty": 2.118104
+            },
+            "last_review_at": 1800000000
+          },
+          "due_at": 1800086400,
+          "reviews": 1,
+          "lapses": 0,
+          "parameters_id": "3cec91ddae80b63ff8b6ee5aef193c6fda5e36de895f3e36a767d3fd75855dfe",
+          "origin": "new",
+          "legacy": null
+        },
+        "event": {
+          "at": 1800000000,
+          "rating": "good"
+        },
+        "elapsed_days": 0,
+        "interval_days": 1,
+        "config_id": "965805950f23173a02aa5c9e5d681cc71bb0a19f12077084a491224e5ea1d6cf"
+      },
+      {
+        "state": {
+          "version": "fsrs6_v1",
+          "memory": {
+            "memory": {
+              "stability_days": 0.7750839,
+              "difficulty": 7.394502
+            },
+            "last_review_at": 1800000000
+          },
+          "due_at": 1800086400,
+          "reviews": 2,
+          "lapses": 1,
+          "parameters_id": "3cec91ddae80b63ff8b6ee5aef193c6fda5e36de895f3e36a767d3fd75855dfe",
+          "origin": "new",
+          "legacy": null
+        },
+        "event": {
+          "at": 1800000000,
+          "rating": "again"
+        },
+        "elapsed_days": 0,
+        "interval_days": 1,
+        "config_id": "965805950f23173a02aa5c9e5d681cc71bb0a19f12077084a491224e5ea1d6cf"
+      },
+      {
+        "state": {
+          "version": "fsrs6_v1",
+          "memory": {
+            "memory": {
+              "stability_days": 2.8575134,
+              "difficulty": 8.255577
+            },
+            "last_review_at": 1800172800
+          },
+          "due_at": 1800259200,
+          "reviews": 3,
+          "lapses": 1,
+          "parameters_id": "3cec91ddae80b63ff8b6ee5aef193c6fda5e36de895f3e36a767d3fd75855dfe",
+          "origin": "new",
+          "legacy": null
+        },
+        "event": {
+          "at": 1800172800,
+          "rating": "hard"
+        },
+        "elapsed_days": 2,
+        "interval_days": 1,
+        "config_id": "965805950f23173a02aa5c9e5d681cc71bb0a19f12077084a491224e5ea1d6cf"
+      },
+      {
+        "state": {
+          "version": "fsrs6_v1",
+          "memory": {
+            "memory": {
+              "stability_days": 45.762596,
+              "difficulty": 7.6579003
+            },
+            "last_review_at": 1804060800
+          },
+          "due_at": 1805875200,
+          "reviews": 4,
+          "lapses": 1,
+          "parameters_id": "3cec91ddae80b63ff8b6ee5aef193c6fda5e36de895f3e36a767d3fd75855dfe",
+          "origin": "new",
+          "legacy": null
+        },
+        "event": {
+          "at": 1804060800,
+          "rating": "easy"
+        },
+        "elapsed_days": 45,
+        "interval_days": 21,
+        "config_id": "965805950f23173a02aa5c9e5d681cc71bb0a19f12077084a491224e5ea1d6cf"
+      }
+    ],
+    "recall_vectors": [
+      {
+        "stability_days": 10.0,
+        "last_review_at": 1800000000,
+        "now": 1800000000,
+        "elapsed_days": 0,
+        "recall": 1.0
+      },
+      {
+        "stability_days": 10.0,
+        "last_review_at": 1800000000,
+        "now": 1800000001,
+        "elapsed_days": 0,
+        "recall": 1.0
+      },
+      {
+        "stability_days": 10.0,
+        "last_review_at": 1800000000,
+        "now": 1800086399,
+        "elapsed_days": 0,
+        "recall": 1.0
+      },
+      {
+        "stability_days": 10.0,
+        "last_review_at": 1800000000,
+        "now": 1800086400,
+        "elapsed_days": 1,
+        "recall": 0.98847395
+      },
+      {
+        "stability_days": 10.0,
+        "last_review_at": 1800000000,
+        "now": 1800086401,
+        "elapsed_days": 1,
+        "recall": 0.98847395
+      },
+      {
+        "stability_days": 10.0,
+        "last_review_at": 1800000000,
+        "now": 1800172799,
+        "elapsed_days": 1,
+        "recall": 0.98847395
+      },
+      {
+        "stability_days": 10.0,
+        "last_review_at": 1800000000,
+        "now": 1800172800,
+        "elapsed_days": 2,
+        "recall": 0.97733754
+      },
+      {
+        "stability_days": 10.0,
+        "last_review_at": 1800000000,
+        "now": 1800864000,
+        "elapsed_days": 10,
+        "recall": 0.9
+      },
+      {
+        "stability_days": 10.0,
+        "last_review_at": 1800000000,
+        "now": 1805184000,
+        "elapsed_days": 60,
+        "recall": 0.6445033
+      },
+      {
+        "stability_days": 0.001,
+        "last_review_at": 1800000000,
+        "now": 1800086400,
+        "elapsed_days": 1,
+        "recall": 0.06515412
+      },
+      {
+        "stability_days": 1.0,
+        "last_review_at": 1800000000,
+        "now": 1802592000,
+        "elapsed_days": 30,
+        "recall": 0.35273775
+      },
+      {
+        "stability_days": 36500.0,
+        "last_review_at": 1800000000,
+        "now": 4953600000,
+        "elapsed_days": 36500,
+        "recall": 0.9
+      }
+    ]
+  }
+]
