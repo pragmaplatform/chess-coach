@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.1
+
+### Fixed
+
+- Accept the root search's selected best evaluation during practice even when absolute score drift made the comparison inconclusive, while retaining mating-objective checks and assisted grading.
+- Add `practice::verify_comparison` for stronger practice searches. Recover safely acceptable alternatives and borderline earlier verdicts when supported by stable loss or stable submitted-move evidence; keep strict analysis verification unchanged. Applications must adopt this helper for alternative-move recovery.
+- Cover the captured Caro-Kann `Qa5+` case, score drift, grading cutoffs, contradictory comparisons, search budgets, sources, and mating safeguards with regression tests.
+
 ## 0.2.0
 
 ### Breaking

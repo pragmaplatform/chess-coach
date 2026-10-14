@@ -96,6 +96,62 @@ pub struct FollowUpPosition {
     pub setup_san: Vec<String>,
 }
 
+/// Verify a stronger practice search without requiring absolute scores to converge.
+///
+/// Both comparisons must describe this exercise's position/history, engine identity,
+/// and submitted move. Alternative-move recovery requires larger node counts for both
+/// evaluations, matching sources, unchanged mating outcomes, and a final loss more
+/// than one percentage point below the exercise's pass/fail cutoff. It accepts:
+/// - consistently acceptable losses that change by at most two percentage points;
+/// - an earlier borderline loss (within one point of the cutoff) when the submitted
+///   move's evaluation changes by at most two points.
+///
+/// Recovered comparisons are `Unverified`: the grading evidence is sufficient, but
+/// absolute scores did not converge. Copy the returned best/confidence into the
+/// exercise before calling [`grade`]. Lesson discovery should continue using
+/// [`MoveEvaluation::compared_with`].
+pub fn verify_comparison(exercise: &Exercise, current: MoveEvaluation, previous: &MoveEvaluation) -> MoveEvaluation {
+    let mut verified = current.compared_with(previous);
+    if verified.played.best_move != previous.played.best_move || !consistent(&verified) {
+        verified.confidence = EvaluationConfidence::Inconclusive;
+        return verified;
+    }
+    if verified.confidence == EvaluationConfidence::Inconclusive
+        && objective_supported(exercise.objective, verified.best.score)
+        && (verified.best == verified.played || acceptable_alternative(exercise, &verified, previous))
+    {
+        verified.confidence = EvaluationConfidence::Unverified;
+    }
+    verified
+}
+
+fn consistent(comparison: &MoveEvaluation) -> bool {
+    MoveEvaluation::new(comparison.best.clone(), comparison.played.clone()).confidence
+        != EvaluationConfidence::Inconclusive
+}
+
+fn acceptable_alternative(exercise: &Exercise, current: &MoveEvaluation, previous: &MoveEvaluation) -> bool {
+    if !consistent(previous)
+        || current.best.source != previous.best.source
+        || current.best.nodes <= previous.best.nodes
+        || current.played.nodes <= previous.played.nodes
+        || current.best.score.mate_outcome() != current.played.score.mate_outcome()
+        || current.best.score.mate_outcome() != previous.best.score.mate_outcome()
+        || current.played.score.mate_outcome() != previous.played.score.mate_outcome()
+    {
+        return false;
+    }
+    let cutoff = exercise.minimum_loss().unwrap_or(exercise.acceptable_loss);
+    let current_loss = loss(current.best.score, current.played.score);
+    let previous_loss = loss(previous.best.score, previous.played.score);
+    let margin = 0.01;
+    let tolerance = 0.02;
+    let stable_loss = previous_loss < cutoff - margin && (current_loss - previous_loss).abs() <= tolerance;
+    let borderline_revision = (previous_loss - cutoff).abs() <= margin
+        && (current.played.score.probability() - previous.played.score.probability()).abs() <= tolerance;
+    current_loss < cutoff - margin && (stable_loss || borderline_revision)
+}
+
 pub fn grade(exercise: &Exercise, submitted_uci: &str, played: Evaluation, assisted: bool) -> Result<Feedback, Error> {
     game::legal_move(&game::board(&exercise.position)?, submitted_uci)?;
     if played.best_move != submitted_uci {
@@ -110,12 +166,12 @@ pub fn grade(exercise: &Exercise, submitted_uci: &str, played: Evaluation, assis
     if comparison.confidence != EvaluationConfidence::Inconclusive {
         comparison.confidence = exercise.confidence;
     }
-    let objective_supported = match exercise.objective {
-        Objective::BestMove => true,
-        Objective::FindMate => matches!(comparison.best.score, Score::Mate(n) if n > 0),
-        Objective::AvoidMate => !matches!(comparison.best.score, Score::Mate(n) if n <= 0),
-    };
-    if !objective_supported {
+    if comparison.best == comparison.played && comparison.confidence == EvaluationConfidence::Inconclusive {
+        // The root search itself selected this answer. Absolute score drift does
+        // not make a move worse than itself; do not claim the scores converged.
+        comparison.confidence = EvaluationConfidence::Unverified;
+    }
+    if !objective_supported(exercise.objective, comparison.best.score) {
         comparison.confidence = EvaluationConfidence::Inconclusive;
     }
     let loss = loss(comparison.best.score, comparison.played.score);
@@ -150,6 +206,14 @@ pub fn grade(exercise: &Exercise, submitted_uci: &str, played: Evaluation, assis
         best: comparison.best,
         played: comparison.played,
     })
+}
+
+fn objective_supported(objective: Objective, best: Score) -> bool {
+    match objective {
+        Objective::BestMove => true,
+        Objective::FindMate => matches!(best, Score::Mate(n) if n > 0),
+        Objective::AvoidMate => !matches!(best, Score::Mate(n) if n <= 0),
+    }
 }
 
 /// Continue a sound submitted line, or demonstrate the correction before asking for the next move.
