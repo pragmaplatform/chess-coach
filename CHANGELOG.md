@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.2.0
+
+### Breaking
+
+- Replaced the fixed review scheduler with optional FSRS-6 scheduling (`fsrs` feature). Use `FsrsScheduler::review` with a separate `RecallRating`; `review::schedule`, progression steps, and `learned()` were removed.
+- Replaced persisted `ReviewState` with a versioned memory state. Its optional `ReviewedMemory` groups the memory estimate and last-review timestamp so they cannot be independently absent. Read old records as `LegacyReviewState` and explicitly migrate using full history or a caller-supplied estimate. Migration preserves due dates, counters, and the original snapshot.
+- Review validation and scheduling failures now use `Error::Review(ReviewError)` instead of generic configuration strings. Serde decoding keeps its native error type.
+
+### Added
+
+- Deterministic scheduling and recall estimates using pinned `fsrs` 6.6.2, default memory parameters, and a 90% retention target. Rust 1.88 remains supported.
+- Grade-to-recall proxy mapping, chronological history replay, and parameter-change reconstruction. Inconclusive grades produce no review rating; short retries and optimization remain application concerns.
+- Serializable, validated state/configuration contracts and OpenAPI schemas. Data types can be used without the scheduler dependency.
+- Tests for upstream parity, elapsed-day handling, migration, configuration changes, and persistence; feature-matrix and MSRV CI checks.
+- Public configuration/parameter identity and named decay accessors, with a documented database recall contract and SQL example.
+- Fixed JSON compatibility fixtures for stored configurations, states, events, identities, scheduling, and recall boundaries; an explicit fixture generator.
+- A runnable storage adapter example covering shared configurations, typed restoration, transaction rollback, duplicate events, and ordered replay.
+
 ## 0.1.1
 
 ### Changed

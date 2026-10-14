@@ -2,7 +2,7 @@
 
 A Rust library for turning your chess games into opening lessons and spaced-repetition practice. **Used on [chess.player.gg](https://chess.player.gg).**
 
-Licensed under the [MIT License](LICENSE). The crate is independent of the application: it has no database, HTTP, account, or queue dependencies, and all Cargo dependencies are public. Stockfish runs as an external UCI process and is not bundled with this crate.
+Licensed under the [MIT License](https://github.com/pragmaplatform/chess-coach/blob/main/LICENSE). The crate is independent of the application: it has no database, HTTP, account, or queue dependencies, and all Cargo dependencies are public. Stockfish runs as an external UCI process and is not bundled with this crate.
 
 The crate provides:
 
@@ -10,7 +10,7 @@ The crate provides:
 - Opening decision extraction for either color, capped by full move number.
 - An `Engine` trait, plus an optional asynchronous Stockfish subprocess adapter.
 - Candidate detection, deeper confirmation, weakness aggregation and practice prioritization.
-- Legal alternative-move grading and deterministic review scheduling.
+- Legal alternative-move grading and optional deterministic FSRS review scheduling.
 - Serializable data types, stable request fingerprints, and optional OpenAPI schemas.
 
 ## Getting started
@@ -38,7 +38,7 @@ assert_eq!(decisions[0].played_uci, "e2e4");
 # Ok::<(), chess_coach::Error>(())
 ```
 
-For the full pipeline, pass a `Game`, an `AnalysisPolicy`, and an `Engine` to `analysis::analyze_game`, then combine observations with `ranking::aggregate`. Use `practice::grade` to judge a submitted move and `review::schedule` to compute its next review. Your application owns importing games, storing reports and exercises, and scheduling engine work. The runnable example below demonstrates analysis with Stockfish.
+For the full pipeline, pass a `Game`, an `AnalysisPolicy`, and an `Engine` to `analysis::analyze_game`, then combine observations with `ranking::aggregate`. Use `practice::grade` to judge a submitted move and, with the `fsrs` feature, `review::FsrsScheduler` to compute its next review. Your application owns importing games, storing reports and exercises, and scheduling engine work. The runnable example below demonstrates analysis with Stockfish.
 
 The public API is pre-1.0. Persist the policy and engine profile alongside results; changing search budgets or thresholds can change the lessons generated.
 
@@ -89,18 +89,70 @@ Winning/losing mate scores map to 1/0. These losses rank practice opportunities;
 
 Best and submitted scores must have the same `EvaluationSource`; grading rejects mixed cloud/local comparisons. The application pins cloud variations with the exercise and uses them for clear answers. Missing data and borderline or inconsistent answers fall back to local comparisons, evaluating a new local best as well when the original best came from cloud. Feedback contains the actual pair used to grade. Old evaluations without a source deserialize as Stockfish.
 
-The caller persists `ReviewState` and supplies UTC epoch seconds to `review::schedule`. Correct and good reviews advance through 1, 3, 7, 14, 30, 60 and 120 days without adding a lapse. Incorrect answers return in 10 minutes; assisted answers in one hour. Both reset progression.
+## Review scheduling
+
+Enable `fsrs` to use `review::FsrsScheduler`, backed by the pinned [`fsrs` 6.6.2 release](https://github.com/open-spaced-repetition/fsrs-rs/releases/tag/v6.6.2). It uses FSRS-6 defaults, a 90% desired retention target, and a maximum interval of 36,500 days. Retention is a target to validate on your users, not a guarantee. Lower the maximum interval in `FsrsConfig` if your application needs a shorter horizon. Scheduling is deterministic and uses caller-supplied UTC epoch seconds. There is no random interval fuzz or implicit system clock.
+
+```rust
+# #[cfg(feature = "fsrs")]
+# {
+use chess_coach::{practice::Grade, review::{FsrsConfig, FsrsScheduler, RecallRating}};
+
+let scheduler = FsrsScheduler::new(FsrsConfig::default())?;
+let now = 1_800_000_000;
+let mut state = scheduler.new_state(now);
+let grade = Grade::Correct; // From practice::grade, after an independent attempt.
+
+if let Some(rating) = RecallRating::from_grade(grade) {
+    let transition = scheduler.review(&state, rating, now)?;
+    // Application: atomically persist the event and state; deduplicate by event ID.
+    state = transition.state;
+}
+let recall_probability = scheduler.retrievability(&state, now)?;
+# let _ = recall_probability;
+# }
+# Ok::<(), chess_coach::Error>(())
+```
+
+Move quality and recall difficulty are separate. The optional `RecallRating::from_grade` helper maps both `correct` and `good` to FSRS `Good`, `incorrect` and `assisted` to `Again`, and `inconclusive` to `None` (leave state unchanged). If you collect subjective recall difficulty, pass `Hard`, `Good`, or `Easy` for a successful unassisted answer. `Hard` means successful recall with difficulty; an engine-perfect move is not automatically `Easy`. Use `assisted` as a recall failure only when help was needed during an actual attempt. Teaching shown before an attempt is an exposure and should not call `review`.
+
+`ReviewState.memory` is `Option<ReviewedMemory>`: a required `MemoryState` (stability in days and difficulty) paired with a required `last_review_at` timestamp, or `None` for unseen items. `ReviewState` also stores the due date, counters, initialization provenance, and a memory-parameter fingerprint. `ReviewTransition` includes the event, elapsed/assigned intervals, and a fingerprint of the entire configuration. Persist configurations under these identities and retain chronological events with item/event IDs, objective grades, rating provenance, and assistance/exposure information. Persist state and events atomically. Equal timestamps are allowed; event deduplication belongs to the application.
+
+Use `scheduler.config_id()` and `scheduler.parameters_id()` for configuration identities, and `scheduler.decay()` for database recall calculations. The [storage integration guide](https://github.com/pragmaplatform/chess-coach/blob/main/docs/review-storage.md) includes the forgetting-curve contract, SQL, fixed compatibility vectors, and a runnable transactional storage example. Scheduling failures are typed as `Error::Review(ReviewError::...)`, including parameter mismatch, invalid state, and backwards timestamps; callers do not need to parse messages.
+
+Elapsed days are `floor((now - last_review_at) / 86_400)`, including zero for same-day reviews, consistently in scheduling and replay. The first review has elapsed time zero. Intervals are rounded to the nearest whole day and clamped to `[1, maximum_interval_days]`; backwards times and timestamp overflow are errors. `Again` increments lapses even on a new item, preserving this crate's previous counter meaning. Short retries (for example, ten minutes after a failure or an hour after assistance) are application session policy, separate from the returned long-term due date. Log actual retries too.
+
+All review data types support Serde and optional OpenAPI without enabling the scheduler. `FsrsConfig::default()` and `FsrsScheduler` require `fsrs`. New state and configuration formats identify `fsrs6_v1`; unknown versions and invalid state/configuration data are rejected. The Rust API and JSON shape intentionally replace the old `ReviewState`, `review::schedule`, `step`, `LEARNED_STEP`, and `learned()` contract. Applications that previously scheduled reviews must enable `fsrs` and migrate explicitly.
+
+### Migrating saved progress
+
+Read the old JSON as `LegacyReviewState`. `scheduler.migrate(&legacy, &history, seed)` preserves its due date and counters and retains an unchanged `legacy` snapshot for rollback. It does not reschedule the collection. Adopt the returned state atomically; keep subsequent events if you need to reconstruct progress after rollback.
+
+- With complete history, supply every counted event as `ReviewEvent { at, rating }` and `None` for the seed. Counts must agree with the saved review/lapse counters. Historical correct/good grades can use the binary mapping, labeled as inferred in your event store; inconclusive events are not counted.
+- With partial or no history, supply an explicit `MemorySeed { memory, last_review_at }` immediately before the known suffix. The result is labeled `estimated`. The caller owns the estimate and its supporting evidence; seed values are not synthetic optimizer reviews. A seed must stand for at least one prior review.
+- With no prior reviews, empty history needs no seed. An experienced item without history or an explicit seed returns an error and leaves existing data alone. Keep it on your application's legacy path until you have evidence or choose an estimate. Step 0 cannot identify the last outcome, and saturated step 6 can correspond to 60 or 120 days, so the crate does not invent timestamps from steps.
+
+After changing memory parameters, use `scheduler.rebuild(&state, &history, seed)` to reconstruct memory under the new configuration while preserving the current due date, counters, and legacy snapshot. Unseeded history must be complete and end at the stored last review time; partial history needs an explicit estimate. Scheduling rejects a state from a different parameter set. Changing only desired retention or the maximum interval does not require rebuilding memory and takes effect on the next review. Keep parameter optimization in the application or a separate offline tool; the crate does not run training jobs.
+
+### Retention and chess skill
+
+Use one memory item per user and stable position/objective/answer contract. Do not treat different examples of a theme as repetitions of one interchangeable FSRS item. Exercise variety, theme balancing, related-position spacing, and unseen-position assessment belong to the application. Stability and recall probability do not establish transferable chess mastery, so the replacement API has no `learned()` flag.
+
+Before switching a production application, collect history and run FSRS in shadow mode alongside its existing scheduling. Evaluate prediction calibration on later independent reviews, then compare delayed recall, unseen-position performance, and total practice time in a prospective trial. Fewer reviews or a better prediction score alone do not establish better chess learning. The former scheduler can remain an application experiment control; it is not a second permanent scheduling implementation in this crate.
 
 ## Features and verification
 
-GitHub Actions runs formatting, Clippy (with warnings treated as errors), all-feature tests, and a build without default features on all pushes. The Stockfish integration tests remain opt-in.
+GitHub Actions runs formatting, Clippy (with warnings treated as errors), feature-matrix tests, and an all-feature check on Rust 1.88 on all pushes. The Stockfish integration tests remain opt-in.
 
 - `uci` (default): Tokio subprocess adapter. Disable default features to provide your own `Engine`.
+- `fsrs` (opt-in): FSRS-6 memory scheduler. Review data types remain available without this feature.
 - `openapi`: optional schema generation with chess-prefixed type names.
 
 ```bash
 cargo test --all-features
-cargo check --no-default-features
+cargo test --no-default-features
+cargo test --no-default-features --features fsrs
+cargo +1.88.0 check --locked --all-features
 STOCKFISH_PATH=/path/to/stockfish cargo test --all-features --test coaching stockfish_scores -- --ignored
 ```
 
@@ -108,10 +160,10 @@ The external-engine tests are opt-in so ordinary unit tests remain self-containe
 
 ## Custom engines
 
-Disable default features to use the analysis, grading, and scheduling modules without the Tokio subprocess adapter. Implement `Engine::evaluate` with scores from the root position's **side-to-move perspective**, honoring `root_move` when present. `Evaluation.line` must start with `best_move` and contain legal UCI moves. Evaluate the supplied move history, not just its final FEN, so repetition and draw rules are retained. Return errors for failed searches.
+Disable default features to use analysis and grading without the Tokio subprocess adapter; add `features = ["fsrs"]` if you also want scheduling. Implement `Engine::evaluate` with scores from the root position's **side-to-move perspective**, honoring `root_move` when present. `Evaluation.line` must start with `best_move` and contain legal UCI moves. Evaluate the supplied move history, not just its final FEN, so repetition and draw rules are retained. Return errors for failed searches.
 
 Cloud evaluations are optional; the default implementation returns no cached result. If supplied, variations must be ordered best first, use `EvaluationSource::LichessCloud`, share the same root and search, and honor the requested minimum depth. The caller provides transport and caching.
 
 ## License and acknowledgements
 
-The source, examples, and tests in this crate are available under the [MIT License](LICENSE), copyright 2026 FirstLook. Dependencies retain their own licenses. `cozy-chess` supplies move legality and SAN/UCI conversion; `esca` supplies opening classification, using the CC0 opening catalogue from lichess-org/chess-openings. Stockfish is a separately installed GPL-3.0 engine; the crate does not distribute its executable or network files.
+The source, examples, and tests in this crate are available under the [MIT License](https://github.com/pragmaplatform/chess-coach/blob/main/LICENSE), copyright 2026 FirstLook. Dependencies retain their own licenses. `cozy-chess` supplies move legality and SAN/UCI conversion; `esca` supplies opening classification, using the CC0 opening catalogue from lichess-org/chess-openings. Optional `fsrs` is [BSD-3-Clause licensed](https://github.com/open-spaced-repetition/fsrs-rs/blob/v6.6.2/LICENSE); distributions using it must retain its copyright, license conditions, and disclaimer, and respect its non-endorsement condition. Stockfish is a separately installed GPL-3.0 engine; the crate does not distribute its executable or network files.

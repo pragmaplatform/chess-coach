@@ -7,7 +7,7 @@ use chess_coach::{
     game::{Color, Game, decisions},
     practice::{self, Exercise, Grade, Objective},
     ranking,
-    review::{self, ReviewState},
+    review::RecallRating,
     teaching::Theme,
 };
 
@@ -935,16 +935,7 @@ async fn unsettled_searches_do_not_become_lessons_or_successful_reviews() {
             assert_eq!(feedback.grade, Grade::Inconclusive);
             assert_eq!(feedback.objective_met, None);
             assert!(practice::follow_up(&exercise.position, &feedback).unwrap().is_none());
-            let state = ReviewState {
-                step: 4,
-                reviews: 12,
-                lapses: 2,
-                due_at: 1234,
-            };
-            assert_eq!(
-                serde_json::to_value(review::schedule(&state, feedback.grade, 5000)).unwrap(),
-                serde_json::to_value(state).unwrap()
-            );
+            assert_eq!(RecallRating::from_grade(feedback.grade), None);
         }
     }
 }
