@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.2
+
+### Fixed
+
+- Add typed practice `Evidence`, `Assessment`, and `Uncertainty` with `grade_with_evidence`. Preserve saved exercise confidence and both verification searches, distinguish score-ordering disagreements from score drift and mate contradictions, and keep serialized exercise/feedback contracts unchanged.
+- Accept a clearly winning Stockfish answer above the stored reference in an `avoid_mate` exercise with non-inconclusive confidence. Grade it as `correct` (or `assisted`) with `unverified` confidence while preserving the original evaluations. Keep explicit uncertainty, mate-score contradictions, other objectives, and strict lesson discovery unchanged.
+- Add the captured Caro-Kann `fxe5` regression and coverage for the winning-band boundary, invalid evidence, assisted grading, review ratings, and follow-up selection.
+
 ## 0.2.1
 
 ### Fixed
