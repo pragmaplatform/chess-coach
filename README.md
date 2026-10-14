@@ -19,7 +19,7 @@ Requires Rust 1.88 or newer. Add the crate to your dependencies:
 
 ```toml
 [dependencies]
-chess-coach = "0.1.1"
+chess-coach = "0.2.0"
 ```
 
 Replay a game and extract the player's opening decisions without running an engine:
