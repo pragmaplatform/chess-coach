@@ -91,6 +91,12 @@ Best and submitted scores must have the same `EvaluationSource`; grading rejects
 
 ## Review scheduling
 
+Enable the optional scheduler in your dependencies:
+
+```toml
+chess-coach = { version = "0.2.0", features = ["fsrs"] }
+```
+
 Enable `fsrs` to use `review::FsrsScheduler`, backed by the pinned [`fsrs` 6.6.2 release](https://github.com/open-spaced-repetition/fsrs-rs/releases/tag/v6.6.2). It uses FSRS-6 defaults, a 90% desired retention target, and a maximum interval of 36,500 days. Retention is a target to validate on your users, not a guarantee. Lower the maximum interval in `FsrsConfig` if your application needs a shorter horizon. Scheduling is deterministic and uses caller-supplied UTC epoch seconds. There is no random interval fuzz or implicit system clock.
 
 ```rust
@@ -120,6 +126,12 @@ Move quality and recall difficulty are separate. The optional `RecallRating::fro
 
 Use `scheduler.config_id()` and `scheduler.parameters_id()` for configuration identities, and `scheduler.decay()` for database recall calculations. The [storage integration guide](https://github.com/pragmaplatform/chess-coach/blob/main/docs/review-storage.md) includes the forgetting-curve contract, SQL, fixed compatibility vectors, and a runnable transactional storage example. Scheduling failures are typed as `Error::Review(ReviewError::...)`, including parameter mismatch, invalid state, and backwards timestamps; callers do not need to parse messages.
 
+Run the scheduling and storage example from the repository root without Stockfish or a database:
+
+```bash
+cargo run --no-default-features --features fsrs --example review_storage
+```
+
 Elapsed days are `floor((now - last_review_at) / 86_400)`, including zero for same-day reviews, consistently in scheduling and replay. The first review has elapsed time zero. Intervals are rounded to the nearest whole day and clamped to `[1, maximum_interval_days]`; backwards times and timestamp overflow are errors. `Again` increments lapses even on a new item, preserving this crate's previous counter meaning. Short retries (for example, ten minutes after a failure or an hour after assistance) are application session policy, separate from the returned long-term due date. Log actual retries too.
 
 All review data types support Serde and optional OpenAPI without enabling the scheduler. `FsrsConfig::default()` and `FsrsScheduler` require `fsrs`. New state and configuration formats identify `fsrs6_v1`; unknown versions and invalid state/configuration data are rejected. The Rust API and JSON shape intentionally replace the old `ReviewState`, `review::schedule`, `step`, `LEARNED_STEP`, and `learned()` contract. Applications that previously scheduled reviews must enable `fsrs` and migrate explicitly.
@@ -144,7 +156,7 @@ Before switching a production application, collect history and run FSRS in shado
 
 GitHub Actions runs formatting, Clippy (with warnings treated as errors), feature-matrix tests, and an all-feature check on Rust 1.88 on all pushes. The Stockfish integration tests remain opt-in.
 
-- `uci` (default): Tokio subprocess adapter. Disable default features to provide your own `Engine`.
+- `uci` (default): Tokio subprocess adapter. Custom `Engine` implementations work with or without this feature; disable default features to omit the adapter.
 - `fsrs` (opt-in): FSRS-6 memory scheduler. Review data types remain available without this feature.
 - `openapi`: optional schema generation with chess-prefixed type names.
 
