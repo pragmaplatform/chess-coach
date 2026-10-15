@@ -67,7 +67,8 @@ pub enum Grade {
     Correct,
     Good,
     Incorrect,
-    Assisted,
+    /// Legacy assisted answers have no independent move-quality verdict.
+    #[serde(alias = "assisted")]
     Inconclusive,
 }
 
@@ -256,22 +257,17 @@ fn acceptable_alternative(exercise: &Exercise, current: &MoveEvaluation, previou
     current_loss < cutoff - margin && (stable_loss || borderline_revision)
 }
 
-pub fn grade(exercise: &Exercise, submitted_uci: &str, played: Evaluation, assisted: bool) -> Result<Feedback, Error> {
+pub fn grade(exercise: &Exercise, submitted_uci: &str, played: Evaluation) -> Result<Feedback, Error> {
     let mut comparison = MoveEvaluation::new(exercise.best.clone(), played);
     if comparison.confidence != EvaluationConfidence::Inconclusive {
         comparison.confidence = exercise.confidence;
     }
-    grade_with_evidence(exercise, submitted_uci, Evidence::Search(comparison), assisted)
+    grade_with_evidence(exercise, submitted_uci, Evidence::Search(comparison))
 }
 
 /// Grade raw or verified evidence while retaining the saved exercise and verification context.
 /// Both searches must belong to this exercise's position/history and engine identity.
-pub fn grade_with_evidence(
-    exercise: &Exercise,
-    submitted_uci: &str,
-    evidence: Evidence,
-    assisted: bool,
-) -> Result<Feedback, Error> {
+pub fn grade_with_evidence(exercise: &Exercise, submitted_uci: &str, evidence: Evidence) -> Result<Feedback, Error> {
     game::legal_move(&game::board(&exercise.position)?, submitted_uci)?;
     let comparison = assess(exercise, evidence).comparison;
     if comparison.played.best_move != submitted_uci {
@@ -292,8 +288,6 @@ pub fn grade_with_evidence(
     };
     let grade = if comparison.confidence == EvaluationConfidence::Inconclusive {
         Grade::Inconclusive
-    } else if assisted {
-        Grade::Assisted
     } else if !objective_met {
         Grade::Incorrect
     } else if loss <= exercise.acceptable_loss {

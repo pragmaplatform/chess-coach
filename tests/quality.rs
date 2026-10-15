@@ -111,7 +111,7 @@ async fn stockfish_coaching_quality_corpus() -> Result<(), Box<dyn std::error::E
                 } else {
                     engine.evaluate(&request).await?
                 };
-                let feedback = practice::grade(&exercise, uci, played, false)?;
+                let feedback = practice::grade(&exercise, uci, played)?;
                 if nodes == 100_000 {
                     shallow_grades.push(feedback.grade);
                     continue;

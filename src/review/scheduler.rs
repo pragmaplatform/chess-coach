@@ -152,7 +152,7 @@ impl FsrsScheduler {
 
     /// Imports legacy progress without moving its due date or resetting counters.
     /// Without a seed, history must contain every counted legacy review (including
-    /// assisted failures, excluding inconclusive grades). With a seed, history is
+    /// failures, excluding inconclusive grades). With a seed, history is
     /// a known suffix and the result remains labeled estimated.
     ///
     /// An experienced item with no history requires an explicit seed. In
