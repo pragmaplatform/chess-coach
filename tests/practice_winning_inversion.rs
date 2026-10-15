@@ -17,6 +17,21 @@ fn caro_kann() -> Case {
 }
 
 #[test]
+fn legacy_assisted_feedback_is_readable_but_has_no_independent_verdict() {
+    let case = caro_kann();
+    let result = practice::grade(&case.exercise, &case.submitted_uci, case.played).unwrap();
+    let mut json = serde_json::to_value(&result).unwrap();
+    json["grade"] = "assisted".into();
+    let legacy: practice::Feedback = serde_json::from_value(json).unwrap();
+    assert_eq!(legacy.grade, Grade::Inconclusive);
+    assert_eq!(legacy.best, result.best);
+    assert_eq!(legacy.played, result.played);
+    assert_eq!(RecallRating::from_grade(legacy.grade), None);
+    assert!(practice::follow_up(&case.exercise.position, &legacy).unwrap().is_none());
+    assert_eq!(serde_json::to_value(legacy).unwrap()["grade"], "inconclusive");
+}
+
+#[test]
 fn caro_kann_fxe5_avoids_mate_despite_outscoring_the_reference() {
     let case = caro_kann();
     assert_eq!(case.exercise.objective, Objective::AvoidMate);
@@ -27,27 +42,23 @@ fn caro_kann_fxe5_avoids_mate_despite_outscoring_the_reference() {
         MoveEvaluation::new(case.exercise.best.clone(), case.played.clone()).confidence,
         EvaluationConfidence::Inconclusive
     );
-    for assisted in [false, true] {
-        let result = practice::grade(&case.exercise, &case.submitted_uci, case.played.clone(), assisted).unwrap();
-        assert_eq!(result.grade, if assisted { Grade::Assisted } else { Grade::Correct });
-        assert_eq!(result.confidence, EvaluationConfidence::Unverified);
-        assert_eq!(result.objective_met, Some(true));
-        assert_eq!(result.loss, 0.0);
-        assert_eq!(result.best, case.exercise.best);
-        assert_eq!(result.played, case.played);
-        assert_ne!(
-            result.teaching.as_ref().unwrap().explanation,
-            "The evaluations have not settled enough to judge this move."
-        );
-        if !assisted {
-            assert_eq!(RecallRating::from_grade(result.grade), Some(RecallRating::Good));
-            let child = practice::follow_up(&case.exercise.position, &result).unwrap().unwrap();
-            assert_eq!(child.setup_san, ["fxe5", "g4"]);
-        }
-        let json = serde_json::to_value(result).unwrap();
-        assert_eq!(json["confidence"], "unverified");
-        assert_eq!(json["grade"], if assisted { "assisted" } else { "correct" });
-    }
+    let result = practice::grade(&case.exercise, &case.submitted_uci, case.played.clone()).unwrap();
+    assert_eq!(result.grade, Grade::Correct);
+    assert_eq!(result.confidence, EvaluationConfidence::Unverified);
+    assert_eq!(result.objective_met, Some(true));
+    assert_eq!(result.loss, 0.0);
+    assert_eq!(result.best, case.exercise.best);
+    assert_eq!(result.played, case.played);
+    assert_ne!(
+        result.teaching.as_ref().unwrap().explanation,
+        "The evaluations have not settled enough to judge this move."
+    );
+    assert_eq!(RecallRating::from_grade(result.grade), Some(RecallRating::Good));
+    let child = practice::follow_up(&case.exercise.position, &result).unwrap().unwrap();
+    assert_eq!(child.setup_san, ["fxe5", "g4"]);
+    let json = serde_json::to_value(result).unwrap();
+    assert_eq!(json["confidence"], "unverified");
+    assert_eq!(json["grade"], "correct");
 }
 
 #[test]
@@ -76,17 +87,15 @@ fn winning_inversion_does_not_override_other_objectives_or_uncertain_evidence() 
             }
             _ => unreachable!(),
         }
-        for assisted in [false, true] {
-            let result = practice::grade(&case.exercise, &case.submitted_uci, case.played.clone(), assisted).unwrap();
-            assert_eq!(result.grade, Grade::Inconclusive, "{reason}");
-            assert_eq!(result.objective_met, None, "{reason}");
-            assert_eq!(RecallRating::from_grade(result.grade), None);
-        }
+        let result = practice::grade(&case.exercise, &case.submitted_uci, case.played.clone()).unwrap();
+        assert_eq!(result.grade, Grade::Inconclusive, "{reason}");
+        assert_eq!(result.objective_met, None, "{reason}");
+        assert_eq!(RecallRating::from_grade(result.grade), None);
     }
     let mut case = caro_kann();
     case.exercise.best.score = Score::Centipawns(598);
     assert_eq!(
-        practice::grade(&case.exercise, &case.submitted_uci, case.played, false)
+        practice::grade(&case.exercise, &case.submitted_uci, case.played)
             .unwrap()
             .grade,
         Grade::Correct
@@ -104,7 +113,7 @@ fn winning_inversion_does_not_hide_mate_contradictions_or_a_failed_answer() {
         let mut case = caro_kann();
         case.exercise.best.score = best;
         case.played.score = played;
-        let result = practice::grade(&case.exercise, &case.submitted_uci, case.played, false).unwrap();
+        let result = practice::grade(&case.exercise, &case.submitted_uci, case.played).unwrap();
         assert_eq!(result.grade, expected);
     }
 }
@@ -113,15 +122,15 @@ fn winning_inversion_does_not_hide_mate_contradictions_or_a_failed_answer() {
 fn winning_inversion_preserves_source_and_move_validation() {
     let mut case = caro_kann();
     case.played.source = EvaluationSource::LichessCloud;
-    assert!(practice::grade(&case.exercise, &case.submitted_uci, case.played, false).is_err());
+    assert!(practice::grade(&case.exercise, &case.submitted_uci, case.played).is_err());
 
     let mut case = caro_kann();
     case.played.best_move = "e7e6".into();
-    assert!(practice::grade(&case.exercise, &case.submitted_uci, case.played, false).is_err());
+    assert!(practice::grade(&case.exercise, &case.submitted_uci, case.played).is_err());
 
     let mut case = caro_kann();
     case.played.best_move = "f6f4".into();
-    assert!(practice::grade(&case.exercise, "f6f4", case.played, false).is_err());
+    assert!(practice::grade(&case.exercise, "f6f4", case.played).is_err());
 }
 
 #[test]
@@ -137,7 +146,7 @@ fn winning_inversion_does_not_bypass_a_verifications_changed_mating_outcome() {
     assert_eq!(verified.confidence, EvaluationConfidence::Inconclusive);
     case.exercise.best = verified.best;
     case.exercise.confidence = verified.confidence;
-    let result = practice::grade(&case.exercise, &case.submitted_uci, verified.played, false).unwrap();
+    let result = practice::grade(&case.exercise, &case.submitted_uci, verified.played).unwrap();
     assert_eq!(result.grade, Grade::Inconclusive);
     assert_eq!(result.objective_met, None);
     assert_eq!(RecallRating::from_grade(result.grade), None);
@@ -158,12 +167,9 @@ fn evidence_preserves_the_saved_exercise_across_raw_and_verified_searches() {
     ] {
         let assessment = practice::assess(&case.exercise, evidence.clone());
         assert_eq!(assessment.uncertainty, None);
-        for assisted in [false, true] {
-            let result =
-                practice::grade_with_evidence(&case.exercise, &case.submitted_uci, evidence.clone(), assisted).unwrap();
-            assert_eq!(result.grade, if assisted { Grade::Assisted } else { Grade::Correct });
-            assert_eq!(result.confidence, EvaluationConfidence::Unverified);
-        }
+        let result = practice::grade_with_evidence(&case.exercise, &case.submitted_uci, evidence.clone()).unwrap();
+        assert_eq!(result.grade, Grade::Correct);
+        assert_eq!(result.confidence, EvaluationConfidence::Unverified);
     }
     assert_eq!(case.exercise.confidence, EvaluationConfidence::Confirmed);
 }
@@ -228,7 +234,7 @@ fn evidence_distinguishes_ordering_drift_mates_and_invalid_comparisons() {
         };
         let assessment = practice::assess(&case.exercise, evidence.clone());
         assert_eq!(assessment.uncertainty, Some(reason));
-        let result = practice::grade_with_evidence(&case.exercise, &case.submitted_uci, evidence, false).unwrap();
+        let result = practice::grade_with_evidence(&case.exercise, &case.submitted_uci, evidence).unwrap();
         assert_eq!(result.grade, Grade::Inconclusive, "{reason:?}");
         assert_eq!(RecallRating::from_grade(result.grade), None);
     }

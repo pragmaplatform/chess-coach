@@ -9,9 +9,7 @@ fn move_quality_is_not_recall_difficulty() {
     for grade in [Grade::Correct, Grade::Good] {
         assert_eq!(RecallRating::from_grade(grade), Some(RecallRating::Good));
     }
-    for grade in [Grade::Incorrect, Grade::Assisted] {
-        assert_eq!(RecallRating::from_grade(grade), Some(RecallRating::Again));
-    }
+    assert_eq!(RecallRating::from_grade(Grade::Incorrect), Some(RecallRating::Again));
     assert_eq!(RecallRating::from_grade(Grade::Inconclusive), None);
     assert_eq!(serde_json::to_value(RecallRating::Hard).unwrap(), "hard");
 }

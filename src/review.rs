@@ -51,13 +51,12 @@ impl RecallRating {
     /// Binary proxy when subjective recall difficulty was not collected.
     ///
     /// Both successful chess grades map to `Good`, never automatically to `Easy`
-    /// or `Hard`. Only use `Assisted` for help needed during a genuine attempt;
-    /// teaching before an attempt is an exposure, not a failed review. An
+    /// or `Hard`. Teaching before an attempt is an exposure, not a failed review. An
     /// inconclusive grade must not change scheduling state or counters.
     pub fn from_grade(grade: Grade) -> Option<Self> {
         match grade {
             Grade::Correct | Grade::Good => Some(Self::Good),
-            Grade::Incorrect | Grade::Assisted => Some(Self::Again),
+            Grade::Incorrect => Some(Self::Again),
             Grade::Inconclusive => None,
         }
     }

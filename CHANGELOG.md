@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.0
+
+### Breaking
+
+- Remove the assistance flag from `practice::grade` and `practice::grade_with_evidence`, and remove `Grade::Assisted`. Grading and recall proxies now depend only on move quality and evaluation certainty.
+- Read historical `"assisted"` grades as `Inconclusive`, preserving evaluations without granting an independent verdict or recall rating. These grades serialize as `"inconclusive"`; stored review events and memory states are unchanged.
+
 ## 0.2.2
 
 ### Fixed

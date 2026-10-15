@@ -29,11 +29,11 @@ fn caro_kann() -> Case {
     serde_json::from_str(include_str!("fixtures/practice/caro_kann_qa5.json")).unwrap()
 }
 
-fn feedback(mut exercise: Exercise, comparison: MoveEvaluation, assisted: bool) -> Feedback {
+fn feedback(mut exercise: Exercise, comparison: MoveEvaluation) -> Feedback {
     exercise.best = comparison.best;
     exercise.confidence = comparison.confidence;
     let submitted = comparison.played.best_move.clone();
-    practice::grade(&exercise, &submitted, comparison.played, assisted).unwrap()
+    practice::grade(&exercise, &submitted, comparison.played).unwrap()
 }
 
 #[test]
@@ -44,12 +44,10 @@ fn stronger_search_best_move_is_accepted_despite_absolute_score_drift() {
     previous.played.line = case.current.best.line.clone();
     let current = MoveEvaluation::new(case.current.best.clone(), case.current.best).compared_with(&previous);
     assert_eq!(current.confidence, EvaluationConfidence::Inconclusive);
-    for assisted in [false, true] {
-        let result = feedback(case.exercise.clone(), current.clone(), assisted);
-        assert_eq!(result.grade, if assisted { Grade::Assisted } else { Grade::Correct });
-        assert_eq!(result.objective_met, Some(true));
-        assert_eq!(result.confidence, EvaluationConfidence::Unverified);
-    }
+    let result = feedback(case.exercise.clone(), current.clone());
+    assert_eq!(result.grade, Grade::Correct);
+    assert_eq!(result.objective_met, Some(true));
+    assert_eq!(result.confidence, EvaluationConfidence::Unverified);
 }
 
 #[test]
@@ -63,23 +61,18 @@ fn caro_kann_qa5_recovers_good_when_the_preferred_move_changes_but_the_answer_st
     assert!(loss(previous.best.score, previous.played.score) > 0.05);
     let strict = current.clone().compared_with(&previous);
     assert_eq!(strict.confidence, EvaluationConfidence::Inconclusive);
-    assert_eq!(
-        feedback(case.exercise.clone(), strict, false).grade,
-        Grade::Inconclusive
-    );
+    assert_eq!(feedback(case.exercise.clone(), strict).grade, Grade::Inconclusive);
     let verified = practice::verify_comparison(&case.exercise, current, &previous);
-    for assisted in [false, true] {
-        let result = feedback(case.exercise.clone(), verified.clone(), assisted);
-        assert_eq!(result.grade, if assisted { Grade::Assisted } else { Grade::Good });
-        assert_eq!(result.confidence, EvaluationConfidence::Unverified);
-        assert_eq!(result.objective_met, Some(true));
-        assert!((result.loss - 0.026673648767552904).abs() < 1e-12);
-        assert_ne!(
-            result.teaching.as_ref().unwrap().explanation,
-            "The evaluations have not settled enough to judge this move."
-        );
-        assert!(practice::follow_up(&case.exercise.position, &result).unwrap().is_some());
-    }
+    let result = feedback(case.exercise.clone(), verified.clone());
+    assert_eq!(result.grade, Grade::Good);
+    assert_eq!(result.confidence, EvaluationConfidence::Unverified);
+    assert_eq!(result.objective_met, Some(true));
+    assert!((result.loss - 0.026673648767552904).abs() < 1e-12);
+    assert_ne!(
+        result.teaching.as_ref().unwrap().explanation,
+        "The evaluations have not settled enough to judge this move."
+    );
+    assert!(practice::follow_up(&case.exercise.position, &result).unwrap().is_some());
 }
 
 #[test]
@@ -97,7 +90,7 @@ fn acceptable_alternatives_survive_shared_score_drift() {
             EvaluationConfidence::Inconclusive
         );
         let verified = practice::verify_comparison(&case.exercise, current, &previous);
-        assert_eq!(feedback(case.exercise, verified, false).grade, expected);
+        assert_eq!(feedback(case.exercise, verified).grade, expected);
     }
 }
 
@@ -170,12 +163,10 @@ fn best_move_recovery_still_requires_a_supported_mating_objective() {
         best.score = score;
         let mut current = MoveEvaluation::new(best.clone(), best);
         current.confidence = EvaluationConfidence::Inconclusive;
-        for assisted in [false, true] {
-            let result = feedback(exercise.clone(), current.clone(), assisted);
-            assert_eq!(result.grade, Grade::Inconclusive);
-            assert_eq!(result.objective_met, None);
-            assert!(practice::follow_up(&exercise.position, &result).unwrap().is_none());
-        }
+        let result = feedback(exercise.clone(), current.clone());
+        assert_eq!(result.grade, Grade::Inconclusive);
+        assert_eq!(result.objective_met, None);
+        assert!(practice::follow_up(&exercise.position, &result).unwrap().is_none());
     }
 }
 
@@ -185,7 +176,7 @@ fn same_move_name_does_not_override_disagreeing_evaluations() {
     let mut current = MoveEvaluation::new(case.current.best.clone(), case.current.best);
     current.played.score = Score::Centipawns(13);
     current.confidence = EvaluationConfidence::Inconclusive;
-    assert_eq!(feedback(case.exercise, current, false).grade, Grade::Inconclusive);
+    assert_eq!(feedback(case.exercise, current).grade, Grade::Inconclusive);
 }
 
 #[test]
@@ -224,5 +215,5 @@ fn recovery_uses_the_exercises_legacy_and_opening_cutoffs() {
     current.best.line.truncate(1);
     current.played.line.truncate(1);
     let current = practice::verify_comparison(&exercise, current, &previous);
-    assert_eq!(feedback(exercise, current, false).grade, Grade::Good);
+    assert_eq!(feedback(exercise, current).grade, Grade::Good);
 }

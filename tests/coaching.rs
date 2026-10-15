@@ -291,13 +291,8 @@ async fn opening_preferences_are_excluded_for_both_colors_through_move_five() {
                     confidence: observation.confidence,
                     objective: Objective::BestMove,
                 };
-                let feedback = practice::grade(
-                    &exercise,
-                    &observation.decision.played_uci,
-                    observation.played.clone(),
-                    false,
-                )
-                .unwrap();
+                let feedback =
+                    practice::grade(&exercise, &observation.decision.played_uci, observation.played.clone()).unwrap();
                 assert_eq!(
                     feedback.grade,
                     if observation.loss >= exercise.minimum_loss().unwrap() {
@@ -453,21 +448,18 @@ fn opening_grading_keeps_legacy_attempts_and_recalculates_follow_up_thresholds()
     );
     let played = evaluation("f8e7", -86);
     assert_eq!(
-        practice::grade(&exercise, "f8e7", played.clone(), false).unwrap().grade,
+        practice::grade(&exercise, "f8e7", played.clone()).unwrap().grade,
         Grade::Incorrect
     );
     exercise.opening_threshold = Some(Default::default());
-    assert_eq!(
-        practice::grade(&exercise, "f8e7", played, false).unwrap().grade,
-        Grade::Good
-    );
+    assert_eq!(practice::grade(&exercise, "f8e7", played).unwrap().grade, Grade::Good);
     exercise.position = chess_coach::game::position_after(&exercise.position, &["f8e7".into(), "f1e1".into()]).unwrap();
     assert_eq!(exercise.minimum_loss(), Some(0.05));
 
     let mut exercise = exercise_at("f3 c6", Color::Black, evaluation("e7e5", 71));
     exercise.opening_threshold = Some(Default::default());
     assert_eq!(
-        practice::grade(&exercise, "c7c6", evaluation("c7c6", -15), false)
+        practice::grade(&exercise, "c7c6", evaluation("c7c6", -15))
             .unwrap()
             .grade,
         Grade::Good
@@ -476,9 +468,7 @@ fn opening_grading_keeps_legacy_attempts_and_recalculates_follow_up_thresholds()
     json.as_object_mut().unwrap().remove("opening_threshold");
     let legacy: Exercise = serde_json::from_value(json).unwrap();
     assert_eq!(
-        practice::grade(&legacy, "c7c6", evaluation("c7c6", -15), false)
-            .unwrap()
-            .grade,
+        practice::grade(&legacy, "c7c6", evaluation("c7c6", -15)).unwrap().grade,
         Grade::Incorrect
     );
 }
@@ -515,7 +505,7 @@ fn cloud_positions_preserve_draw_history_and_normalize_castling() {
     };
     let mut played = evaluation("d2d4", 0);
     played.source = chess_coach::engine::EvaluationSource::LichessCloud;
-    assert!(practice::grade(&exercise, "d2d4", played, false).is_err());
+    assert!(practice::grade(&exercise, "d2d4", played).is_err());
 }
 
 #[async_trait::async_trait]
@@ -751,31 +741,29 @@ fn practice_accepts_good_alternatives_and_rejects_illegal_or_mismatched_moves() 
         objective: Default::default(),
     };
     assert_eq!(
-        practice::grade(&exercise, "d2d4", evaluation("d2d4", 0), false)
-            .unwrap()
-            .grade,
+        practice::grade(&exercise, "d2d4", evaluation("d2d4", 0)).unwrap().grade,
         Grade::Good
     );
     assert_eq!(
-        practice::grade(&exercise, "d2d4", evaluation("d2d4", 20), false)
+        practice::grade(&exercise, "d2d4", evaluation("d2d4", 20))
             .unwrap()
             .grade,
         Grade::Correct
     );
     assert_eq!(
-        practice::grade(&exercise, "a2a3", evaluation("a2a3", -100), false)
+        practice::grade(&exercise, "a2a3", evaluation("a2a3", -100))
             .unwrap()
             .grade,
         Grade::Incorrect
     );
     assert_eq!(
-        practice::grade(&exercise, "e2e4", evaluation("e2e4", 30), true)
+        practice::grade(&exercise, "e2e4", evaluation("e2e4", 30))
             .unwrap()
             .grade,
-        Grade::Assisted
+        Grade::Correct
     );
-    assert!(practice::grade(&exercise, "e2e5", evaluation("e2e5", 30), false).is_err());
-    assert!(practice::grade(&exercise, "d2d4", evaluation("e2e4", 30), false).is_err());
+    assert!(practice::grade(&exercise, "e2e5", evaluation("e2e5", 30)).is_err());
+    assert!(practice::grade(&exercise, "d2d4", evaluation("e2e4", 30)).is_err());
 }
 
 #[test]
@@ -808,18 +796,7 @@ fn grading_preserves_threshold_boundaries_and_older_exercises() {
         (-55, Grade::Incorrect),
     ] {
         let played = evaluation("d2d4", cp);
-        assert_eq!(
-            practice::grade(&exercise, "d2d4", played.clone(), false).unwrap().grade,
-            grade
-        );
-        assert_eq!(
-            practice::grade(&exercise, "d2d4", played, true).unwrap().grade,
-            if grade == Grade::Inconclusive {
-                Grade::Inconclusive
-            } else {
-                Grade::Assisted
-            }
-        );
+        assert_eq!(practice::grade(&exercise, "d2d4", played.clone()).unwrap().grade, grade);
     }
     let mut json = serde_json::to_value(&exercise).unwrap();
     json.as_object_mut().unwrap().remove("minimum_loss");
@@ -829,9 +806,7 @@ fn grading_preserves_threshold_boundaries_and_older_exercises() {
     assert_eq!(old.objective, Objective::BestMove);
     assert_eq!(old.confidence, EvaluationConfidence::Unverified);
     assert_eq!(
-        practice::grade(&old, "d2d4", evaluation("d2d4", -30), false)
-            .unwrap()
-            .grade,
+        practice::grade(&old, "d2d4", evaluation("d2d4", -30)).unwrap().grade,
         Grade::Incorrect
     );
 
@@ -839,13 +814,13 @@ fn grading_preserves_threshold_boundaries_and_older_exercises() {
     let exact_loss = chess_coach::engine::loss(exercise.best.score, played.score);
     exercise.minimum_loss = Some(exact_loss);
     assert_eq!(
-        practice::grade(&exercise, "d2d4", played.clone(), false).unwrap().grade,
+        practice::grade(&exercise, "d2d4", played.clone()).unwrap().grade,
         Grade::Incorrect
     );
     exercise.acceptable_loss = exact_loss;
     exercise.minimum_loss = Some(0.1);
     assert_eq!(
-        practice::grade(&exercise, "d2d4", played, false).unwrap().grade,
+        practice::grade(&exercise, "d2d4", played).unwrap().grade,
         Grade::Correct
     );
 }
@@ -930,13 +905,11 @@ async fn unsettled_searches_do_not_become_lessons_or_successful_reviews() {
             confidence: observation.confidence,
             objective: Objective::BestMove,
         };
-        for assisted in [false, true] {
-            let feedback = practice::grade(&exercise, "a2a3", observation.played.clone(), assisted).unwrap();
-            assert_eq!(feedback.grade, Grade::Inconclusive);
-            assert_eq!(feedback.objective_met, None);
-            assert!(practice::follow_up(&exercise.position, &feedback).unwrap().is_none());
-            assert_eq!(RecallRating::from_grade(feedback.grade), None);
-        }
+        let feedback = practice::grade(&exercise, "a2a3", observation.played.clone()).unwrap();
+        assert_eq!(feedback.grade, Grade::Inconclusive);
+        assert_eq!(feedback.objective_met, None);
+        assert!(practice::follow_up(&exercise.position, &feedback).unwrap().is_none());
+        assert_eq!(RecallRating::from_grade(feedback.grade), None);
     }
 }
 
@@ -1018,15 +991,15 @@ fn missed_mate_is_taught_even_when_probability_loss_is_small() {
     let mut exercise = exercise_at("f3 e5 g4 Qh4#", Color::Black, best);
     // Synthetic +11 isolates the saturated probability model; the moves and mate are legal.
     let played = evaluation("b8c6", 1100);
-    let feedback = practice::grade(&exercise, "b8c6", played.clone(), false).unwrap();
+    let feedback = practice::grade(&exercise, "b8c6", played.clone()).unwrap();
     assert_eq!(feedback.grade, Grade::Correct);
     assert!(feedback.teaching.as_ref().unwrap().themes.contains(&Theme::MissedMate));
     assert!(feedback.teaching.as_ref().unwrap().explanation.contains("Qh4#"));
     exercise.objective = Objective::FindMate;
-    let feedback = practice::grade(&exercise, "b8c6", played, false).unwrap();
+    let feedback = practice::grade(&exercise, "b8c6", played).unwrap();
     assert_eq!(feedback.grade, Grade::Incorrect);
     assert_eq!(feedback.objective_met, Some(false));
-    let solved = practice::grade(&exercise, "d8h4", exercise.best.clone(), false).unwrap();
+    let solved = practice::grade(&exercise, "d8h4", exercise.best.clone()).unwrap();
     assert_eq!(solved.grade, Grade::Correct);
     assert_eq!(solved.objective_met, Some(true));
     assert!(practice::follow_up(&exercise.position, &solved).unwrap().is_none());
@@ -1044,15 +1017,13 @@ fn obsolete_mating_objectives_are_inconclusive_even_for_the_refreshed_best_move(
         let mut exercise = exercise_at("a3", Color::White, best);
         exercise.objective = objective;
         exercise.confidence = EvaluationConfidence::Confirmed;
-        for assisted in [false, true] {
-            let feedback = practice::grade(&exercise, "e2e4", exercise.best.clone(), assisted).unwrap();
-            assert_eq!(feedback.grade, Grade::Inconclusive);
-            assert_eq!(feedback.confidence, EvaluationConfidence::Inconclusive);
-            assert_eq!(feedback.objective_met, None);
-            assert_eq!(feedback.loss, 0.0);
-            assert!(feedback.teaching.as_ref().unwrap().themes.is_empty());
-            assert!(practice::follow_up(&exercise.position, &feedback).unwrap().is_none());
-        }
+        let feedback = practice::grade(&exercise, "e2e4", exercise.best.clone()).unwrap();
+        assert_eq!(feedback.grade, Grade::Inconclusive);
+        assert_eq!(feedback.confidence, EvaluationConfidence::Inconclusive);
+        assert_eq!(feedback.objective_met, None);
+        assert_eq!(feedback.loss, 0.0);
+        assert!(feedback.teaching.as_ref().unwrap().themes.is_empty());
+        assert!(practice::follow_up(&exercise.position, &feedback).unwrap().is_none());
     }
 }
 
@@ -1109,7 +1080,7 @@ fn explanations_use_legal_replies_and_material_from_the_shown_lines() {
     let exercise = exercise_at("e4 e5 Qh5 Nc6 Qxe5+ Nxe5", Color::Black, evaluation("c6e5", 900));
     let mut played = evaluation("d8e7", 0);
     played.line.push("e5e7".into());
-    let feedback = practice::grade(&exercise, "d8e7", played, false).unwrap();
+    let feedback = practice::grade(&exercise, "d8e7", played).unwrap();
     let teaching = feedback.teaching.unwrap();
     assert!(teaching.themes.contains(&Theme::MaterialLoss));
     assert_eq!(teaching.best.material_change, 9);
@@ -1118,7 +1089,7 @@ fn explanations_use_legal_replies_and_material_from_the_shown_lines() {
     assert!(teaching.explanation.contains("Qxe7+"));
     let mut illegal = evaluation("d8e7", 0);
     illegal.line.push("a2a5".into());
-    assert!(practice::grade(&exercise, "d8e7", illegal, false).is_err());
+    assert!(practice::grade(&exercise, "d8e7", illegal).is_err());
 }
 
 #[test]
@@ -1136,7 +1107,7 @@ fn different_searches_of_the_same_move_do_not_create_comparative_tactical_claims
         let mut played = evaluation("d8e7", 0);
         played.score = played_score;
         played.line = ["d8e7", "e5e7"].map(String::from).to_vec();
-        let feedback = practice::grade(&exercise, "d8e7", played, false).unwrap();
+        let feedback = practice::grade(&exercise, "d8e7", played).unwrap();
         assert_eq!(feedback.grade, Grade::Correct);
         let teaching = feedback.teaching.unwrap();
         assert_eq!(teaching.best.material_change, 0);
@@ -1156,11 +1127,11 @@ fn follow_ups_continue_the_submitted_alternative_or_demonstrate_the_correction()
     let exercise = exercise_at("a3", Color::White, best);
     let mut alternative = evaluation("d2d4", 90);
     alternative.line = ["d2d4", "d7d5", "c2c4"].map(String::from).to_vec();
-    let good = practice::grade(&exercise, "d2d4", alternative, false).unwrap();
+    let good = practice::grade(&exercise, "d2d4", alternative).unwrap();
     let follow_up = practice::follow_up(&exercise.position, &good).unwrap().unwrap();
     assert_eq!(follow_up.setup_san, ["d4", "d5"]);
     assert_eq!(follow_up.position.history_uci, ["d2d4", "d7d5"]);
-    let wrong = practice::grade(&exercise, "a2a3", evaluation("a2a3", -100), false).unwrap();
+    let wrong = practice::grade(&exercise, "a2a3", evaluation("a2a3", -100)).unwrap();
     let follow_up = practice::follow_up(&exercise.position, &wrong).unwrap().unwrap();
     assert_eq!(follow_up.setup_san, ["e4", "e5"]);
     assert_eq!(follow_up.position.history_uci, ["e2e4", "e7e5"]);
