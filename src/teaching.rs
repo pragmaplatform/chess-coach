@@ -137,7 +137,7 @@ fn line_evidence(position: &Position, evaluation: &Evaluation) -> Result<LineEvi
     })
 }
 
-fn material_balance(board: &Board, player: Color) -> i16 {
+pub(crate) fn material_balance(board: &Board, player: Color) -> i16 {
     [
         (Piece::Pawn, 1),
         (Piece::Knight, 3),

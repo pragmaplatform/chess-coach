@@ -89,6 +89,7 @@ fn observation(game_id: &str, moves: &str, loss: f64) -> Observation {
         nodes: 1_000_000,
     };
     Observation {
+        tactics: None,
         decision,
         best: evaluation.clone(),
         played: evaluation,

@@ -14,6 +14,8 @@ pub mod practice;
 pub mod ranking;
 /// Serializable review history and optional FSRS memory scheduling.
 pub mod review;
+/// Optional, bounded sacrifice verification after normal analysis.
+pub mod tactics;
 /// Explanations supported by the evaluated continuations.
 pub mod teaching;
 /// Optional Tokio-based adapter for an external Stockfish process.

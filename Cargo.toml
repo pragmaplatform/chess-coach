@@ -1,6 +1,6 @@
 [package]
 name = "chess-coach"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2024"
 rust-version = "1.88"
 license = "MIT"
@@ -10,7 +10,16 @@ homepage = "https://chess.player.gg"
 repository = "https://github.com/pragmaplatform/chess-coach"
 keywords = ["chess", "stockfish", "uci", "training", "spaced-repetition"]
 categories = ["games"]
-include = ["src/**", "examples/**", "tests/**", "docs/**", "Cargo.toml", "README.md", "CHANGELOG.md", "LICENSE"]
+include = [
+    "src/**",
+    "examples/**",
+    "tests/**",
+    "docs/**",
+    "Cargo.toml",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE",
+]
 
 [package.metadata.docs.rs]
 all-features = true
@@ -48,3 +57,7 @@ required-features = ["fsrs"]
 [[example]]
 name = "review_vectors"
 required-features = ["fsrs"]
+
+[[example]]
+name = "tactics"
+required-features = ["uci"]
