@@ -152,6 +152,9 @@ pub struct Observation {
     /// Qualified cloud variations retained together for consistent practice grading.
     #[serde(default)]
     pub cloud_evaluations: Option<Vec<Evaluation>>,
+    /// None means not scanned; an empty scan means no verified opportunity.
+    #[serde(default)]
+    pub tactics: Option<crate::tactics::TacticalScan>,
 }
 
 pub async fn analyze_game(
@@ -228,6 +231,7 @@ pub async fn analyze_game(
             severity: if conclusive { Severity::from_loss(loss) } else { None },
             mistake: conclusive && (tactical_lesson || (!excluded && loss >= minimum_loss)),
             cloud_evaluations,
+            tactics: None,
         });
     }
     Ok(observations)

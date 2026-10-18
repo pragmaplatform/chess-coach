@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.0
+
+- Add optional, separately scheduled sacrifice/trap verification and typed `Observation.tactics`. Historical JSON remains readable; Rust observation struct literals need `tactics: None`. Normal analysis and practice grading are unchanged.
+
 ## 0.3.0
 
 ### Breaking

@@ -19,7 +19,7 @@ Requires Rust 1.88 or newer. Add the crate to your dependencies:
 
 ```toml
 [dependencies]
-chess-coach = "0.3.0"
+chess-coach = "0.4.0"
 ```
 
 Replay a game and extract the player's opening decisions without running an engine:
@@ -106,7 +106,7 @@ For an `avoid_mate` exercise whose confidence is not `inconclusive`, grading als
 Enable the optional scheduler in your dependencies:
 
 ```toml
-chess-coach = { version = "0.3.0", features = ["fsrs"] }
+chess-coach = { version = "0.4.0", features = ["fsrs"] }
 ```
 
 Enable `fsrs` to use `review::FsrsScheduler`, backed by the pinned [`fsrs` 6.6.2 release](https://github.com/open-spaced-repetition/fsrs-rs/releases/tag/v6.6.2). It uses FSRS-6 defaults, a 90% desired retention target, and a maximum interval of 36,500 days. Retention is a target to validate on your users, not a guarantee. Lower the maximum interval in `FsrsConfig` if your application needs a shorter horizon. Scheduling is deterministic and uses caller-supplied UTC epoch seconds. There is no random interval fuzz or implicit system clock.
@@ -191,3 +191,34 @@ Cloud evaluations are optional; the default implementation returns no cached res
 ## License and acknowledgements
 
 The source, examples, and tests in this crate are available under the [MIT License](https://github.com/pragmaplatform/chess-coach/blob/main/LICENSE), copyright 2026 FirstLook. Dependencies retain their own licenses. `cozy-chess` supplies move legality and SAN/UCI conversion; `esca` supplies opening classification, using the CC0 opening catalogue from lichess-org/chess-openings. Optional `fsrs` is [BSD-3-Clause licensed](https://github.com/open-spaced-repetition/fsrs-rs/blob/v6.6.2/LICENSE); distributions using it must retain its copyright, license conditions, and disclaimer, and respect its non-endorsement condition. Stockfish is a separately installed GPL-3.0 engine; the crate does not distribute its executable or network files.
+
+### Optional sacrifice annotations
+
+`analysis::analyze_game` does not search for sacrifices. Hosts can run
+`tactics::is_candidate` after publishing a report, then call `tactics::scan` on a
+small shortlist using their own low-priority `Engine`. A scan makes at most eight
+engine calls at two caller-supplied node budgets. The host owns concurrency,
+foreground-work checks, caching, and the number of candidates per report.
+
+The first detector handles missed best moves which offer a knight, bishop, rook,
+or queen for a material deficit of at least two pawn units. It excludes already
+capturable pieces and ordinary exchanges; the deficit must remain after the
+player's next move. It verifies soundness against best defence at both budgets,
+and marks `trap` only if the selected capture loses at least 0.10 on the engine
+score's logistic scale relative to best defence. That scale is not an observed
+human win rate. The least valuable legal attacker is preferred, with UCI order breaking ties.
+No trap is marked if best defence also captures the offered piece.
+Only one capture is examined; this conservative
+pass can miss other sacrifices, immediate material recoveries, and traps.
+
+Store the returned scan in `Observation.tactics`. Missing/null means not checked;
+an empty `opportunities` list means checked without a verified finding. Existing
+weaknesses already embed their example observation. Findings do not change
+mistake eligibility, themes, or practice grading. Reply evaluations explicitly
+use the position **after** the offer and the opponent's score perspective.
+
+For a local engine smoke check and timing sample:
+
+```sh
+cargo run --example tactics -- /path/to/stockfish
+```
