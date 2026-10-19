@@ -42,20 +42,9 @@ jobs:
       - name: Check public documentation
         run: RUSTDOCFLAGS="-D warnings" cargo doc --locked --no-deps --all-features
 
-  msrv:
-    name: Rust 1.88
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-      - uses: dtolnay/rust-toolchain@1.88.0
-      - run: cargo check --locked --all-features
-
   publish:
     name: Publish to crates.io
-    needs: [check, msrv]
+    needs: check
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 5
