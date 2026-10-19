@@ -19,7 +19,7 @@ Requires Rust 1.88 or newer. Add the crate to your dependencies:
 
 ```toml
 [dependencies]
-chess-coach = "0.4.0"
+chess-coach = "0.4.1"
 ```
 
 Replay a game and extract the player's opening decisions without running an engine:
@@ -106,7 +106,7 @@ For an `avoid_mate` exercise whose confidence is not `inconclusive`, grading als
 Enable the optional scheduler in your dependencies:
 
 ```toml
-chess-coach = { version = "0.4.0", features = ["fsrs"] }
+chess-coach = { version = "0.4.1", features = ["fsrs"] }
 ```
 
 Enable `fsrs` to use `review::FsrsScheduler`, backed by the pinned [`fsrs` 6.6.2 release](https://github.com/open-spaced-repetition/fsrs-rs/releases/tag/v6.6.2). It uses FSRS-6 defaults, a 90% desired retention target, and a maximum interval of 36,500 days. Retention is a target to validate on your users, not a guarantee. Lower the maximum interval in `FsrsConfig` if your application needs a shorter horizon. Scheduling is deterministic and uses caller-supplied UTC epoch seconds. There is no random interval fuzz or implicit system clock.
@@ -193,6 +193,76 @@ Cloud evaluations are optional; the default implementation returns no cached res
 The source, examples, and tests in this crate are available under the [MIT License](https://github.com/pragmaplatform/chess-coach/blob/main/LICENSE), copyright 2026 FirstLook. Dependencies retain their own licenses. `cozy-chess` supplies move legality and SAN/UCI conversion; `esca` supplies opening classification, using the CC0 opening catalogue from lichess-org/chess-openings. Optional `fsrs` is [BSD-3-Clause licensed](https://github.com/open-spaced-repetition/fsrs-rs/blob/v6.6.2/LICENSE); distributions using it must retain its copyright, license conditions, and disclaimer, and respect its non-endorsement condition. Stockfish is a separately installed GPL-3.0 engine; the crate does not distribute its executable or network files.
 
 ### Optional sacrifice annotations
+
+#### Scan any game position
+
+Call `tactics::candidate_moves(&position)` for an engine-free shortlist or
+`tactics::scan_position(&position, [initial, confirmation], &mut engine)` to
+verify every legal direct piece offer. The position can be at any move number
+and for either side. It must include its standard-game history; a standalone
+FEN without that history is not supported. No mistake observation, played move,
+opening report, or client integration is required.
+
+```rust,no_run
+use chess_coach::{Error, engine::{Engine, EngineProfile}, game::Position, tactics};
+
+async fn find_offers(
+    position: &Position,
+    profiles: [EngineProfile; 2],
+    engine: &mut impl Engine,
+) -> Result<tactics::PositionScan, Error> {
+    tactics::scan_position(position, profiles, engine).await
+}
+```
+
+The scan includes alternatives to the engine's best move. Both search budgets
+must support at least an equal position against best defence, with stable,
+consistent evidence. There is no maximum loss relative to the best move: an
+offer evaluated at 0.00 can qualify even when the best move scores +4.00. Results
+include the stronger root `best` evaluation, each candidate's `sacrifice`
+evaluation, `advantage_given_up_cp` (400 in that example), and `loss` on the
+existing logistic score scale. Centipawn loss is null when either score is a
+mate; the original mate scores remain available. The loss is clamped at zero
+for small independent-search inversions.
+
+The offer and reply evidence must stay stable across budgets. A change in the
+unrestricted best score alone does not disqualify an offer: a stable 0.00 offer
+can qualify when the best score changes from +4.00 to +4.60.
+
+`PositionScan` preserves the root history, profiles, and all `candidate_moves`
+in UCI order. `PositionOpportunity` has no missed/played role. Its reply position
+and both reply evaluations use the opponent's perspective after the offer.
+An empty opportunity list means no offer was verified at these budgets, not
+proof that no sacrifice exists. `best` is null when no candidates require search.
+
+The direct-offer shortlist includes legal check evasions and moves by already
+attacked pieces. It excludes pawn/king moves and promotions, and requires a
+material deficit of at least two pawn units if the moved piece is captured.
+That deficit must remain after the player's next move in the verified capture
+line, excluding immediate material recoveries. It does not search indirect
+sacrifices or quiet traps that do not offer the moved piece. Trap classification
+uses the same single-capture heuristic described below, not a prediction of
+whether a person will take the bait.
+
+The two unrestricted root searches are shared across all candidates. With N
+candidate moves, the scan makes at most `2 + 6N` engine calls (zero when N is
+zero); engine work scales with the number of offers and supplied budgets.
+Offers or replies rejected by an initial check skip their stronger search.
+The host controls scheduling, cancellation, caching, concurrency, and which
+positions to scan. There is no automatic job, practice-pool change, or analysis
+overhead unless the host explicitly calls this API. The existing `Engine` trait
+supports server/remote engines with `default-features = false`; `uci` is needed
+only for the optional local Stockfish adapter.
+
+For a standalone scan with Stockfish 19, use the sample or provide a serialized
+`Position` containing `fen`, `key`, and `history_uci`:
+
+```sh
+cargo run --example position_tactics -- /path/to/stockfish
+cargo run --example position_tactics -- /path/to/stockfish position.json
+```
+
+#### Annotate an existing mistake
 
 `analysis::analyze_game` does not search for sacrifices. Hosts can run
 `tactics::is_candidate` after publishing a report, then call `tactics::scan` on a
