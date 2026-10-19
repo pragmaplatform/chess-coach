@@ -8,7 +8,7 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
   CARGO_TERM_COLOR: always
@@ -42,13 +42,40 @@ jobs:
       - name: Check public documentation
         run: RUSTDOCFLAGS="-D warnings" cargo doc --locked --no-deps --all-features
 
-  msrv:
-    name: Rust 1.88
+  publish:
+    name: Publish to crates.io
+    needs: check
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: dtolnay/rust-toolchain@1.88.0
-      - run: cargo check --locked --all-features
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Check whether the version is published
+        id: version
+        run: |
+          version=$(cargo metadata --locked --no-deps --format-version 1 | jq -r '.packages[0].version')
+          status=$(curl --silent --show-error --retry 3 --max-time 30 \
+            --user-agent 'chess-coach-ci (https://github.com/pragmaplatform/chess-coach)' \
+            --output /dev/null --write-out '%{http_code}' \
+            "https://crates.io/api/v1/crates/chess-coach/$version")
+          case "$status" in
+            200)
+              echo "chess-coach $version is already published; skipping."
+              echo "publish=false" >> "$GITHUB_OUTPUT"
+              ;;
+            404)
+              echo "publish=true" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "::error::Failed to check crates.io for chess-coach $version (HTTP $status)."
+              exit 1
+              ;;
+          esac
+      - name: Publish crate
+        if: steps.version.outputs.publish == 'true'
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo publish --locked
