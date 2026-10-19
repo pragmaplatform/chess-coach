@@ -8,6 +8,7 @@ The crate provides:
 
 - Legal SAN replay and UCI/FEN conversion through `cozy-chess`.
 - Opening decision extraction for either color, capped by full move number.
+- Opening, middlegame, and endgame classification from the board and its history, without an engine.
 - An `Engine` trait, plus an optional asynchronous Stockfish subprocess adapter.
 - Candidate detection, deeper confirmation, weakness aggregation and practice prioritization.
 - Legal alternative-move grading and optional deterministic FSRS review scheduling.
@@ -19,7 +20,7 @@ Requires Rust 1.88 or newer. Add the crate to your dependencies:
 
 ```toml
 [dependencies]
-chess-coach = "0.4.1"
+chess-coach = "0.5.0"
 ```
 
 Replay a game and extract the player's opening decisions without running an engine:
@@ -83,6 +84,51 @@ loss = max(0, P(best) - P(played))
 
 Winning/losing mate scores map to 1/0. These losses rank practice opportunities; they do not predict rating improvement. Reports contain analyzed-game counts, weaknesses and themes, with no potential Elo gain or modeled recovery scenario. One-off mistakes remain eligible for practice. Previously serialized reports remain readable; obsolete gain fields are ignored.
 
+## Game phases
+
+`phase::classify(&position)` returns `Phase::Opening`, `Phase::Middlegame`, or
+`Phase::Endgame` for a standard-game position with its full history. It uses
+[Lichess's phase heuristics](https://github.com/lichess-org/scalachess/blob/736daea6b3fc3dddebbc69f3bd8463dc13cc198a/core/src/main/scala/Divider.scala):
+
+- Middlegame begins when at most ten knights, bishops, rooks, and queens remain
+  across both sides, either side has fewer than four of its own pieces on its
+  home rank, or the mixedness score exceeds 150.
+- Endgame begins when at most six knights, bishops, rooks, and queens remain
+  across both sides. Pawns and kings do not count toward the material limits.
+- Mixedness sums rank-dependent scores over overlapping 2×2 regions, using all
+  pieces of both colors. It is a spatial heuristic, not an engine evaluation.
+
+Both sides' moves determine the boundaries. Once reached, a phase cannot revert
+through undevelopment or promotion. The returned phase describes the supplied
+position **before its next move**, so a move that crosses a boundary still
+belongs to the earlier phase; the next decision gets the new phase. Positions
+are validated against their histories, including the FEN and position key.
+
+```rust
+use chess_coach::{game::{self, Color, Game}, phase::{self, Phase}};
+
+let game = Game {
+    id: "phases".into(),
+    player_color: Color::White,
+    moves_san: "e4 e5 Nf3".into(),
+};
+let decisions = game::decisions(&game, 15)?;
+assert_eq!(phase::classify(&decisions[0].position)?, Phase::Opening);
+# Ok::<(), chess_coach::Error>(())
+```
+
+`analysis::analyze_game` fills `Observation.phase` with `"opening"`,
+`"middlegame"`, or `"endgame"`; aggregated weakness examples carry that same
+field. Historical observations without it deserialize as `None` and are not
+silently relabeled. Hosts can explicitly classify an old observation's saved
+position when needed. Rust observation literals must now include `phase`.
+
+Classification makes no engine requests and works without default features.
+It does not change the analysis move limit, mistake eligibility, numeric early
+opening thresholds, grading, or scheduling. Opening family remains a separate
+property of the game. Backend filters, phase summaries, and UI integration are
+left to the host. Attribution and license: [third-party notices](docs/third-party-licenses.md).
+
 ## Practice contract
 
 `practice::grade` accepts an evaluation for the submitted legal move. The caller obtains that evaluation through its engine/cache using the exercise's saved search profile; alternatives do not have to equal the stored best move. The application snapshots both thresholds when issuing an exercise: `correct` for at most 2 percentage points of loss, `good` for more than 2 but below the position’s cutoff, and `incorrect` at or above that cutoff. Exercises pin `opening_threshold` (a numeric grading cutoff of 10 points through full move 5), with a baseline `minimum_loss` of 5 points afterward. Follow-ups carry both thresholds and evaluate their own move number. Exercises without `opening_threshold` retain their original cutoff. Inconclusive comparisons receive `inconclusive`. Feedback contains the grade, score loss, best/played evaluations and the best continuation in SAN. Exercises saved without `minimum_loss` retain their original binary grading until completed.
@@ -106,7 +152,7 @@ For an `avoid_mate` exercise whose confidence is not `inconclusive`, grading als
 Enable the optional scheduler in your dependencies:
 
 ```toml
-chess-coach = { version = "0.4.1", features = ["fsrs"] }
+chess-coach = { version = "0.5.0", features = ["fsrs"] }
 ```
 
 Enable `fsrs` to use `review::FsrsScheduler`, backed by the pinned [`fsrs` 6.6.2 release](https://github.com/open-spaced-repetition/fsrs-rs/releases/tag/v6.6.2). It uses FSRS-6 defaults, a 90% desired retention target, and a maximum interval of 36,500 days. Retention is a target to validate on your users, not a guarantee. Lower the maximum interval in `FsrsConfig` if your application needs a shorter horizon. Scheduling is deterministic and uses caller-supplied UTC epoch seconds. There is no random interval fuzz or implicit system clock.

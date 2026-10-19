@@ -51,6 +51,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         severity: None,
         cloud_evaluations: None,
         tactics: None,
+        phase: None,
     };
     eprintln!(
         "best={}, candidate={}",

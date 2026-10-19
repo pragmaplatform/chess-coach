@@ -30,6 +30,7 @@ fn observation() -> Observation {
         mistake: true,
         cloud_evaluations: None,
         tactics: None,
+        phase: None,
     }
 }
 
