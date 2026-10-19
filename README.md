@@ -214,6 +214,8 @@ Before switching a production application, collect history and run FSRS in shado
 
 GitHub Actions runs formatting, Clippy (with warnings treated as errors), feature-matrix tests, and an all-feature check on Rust 1.88 on all pushes. The Stockfish integration tests remain opt-in.
 
+After both CI jobs pass on `main`, GitHub Actions publishes the version in `Cargo.toml` to crates.io if it is not already published. Configure the repository Actions secret `CARGO_REGISTRY_TOKEN` with a crates.io token that can publish `chess-coach`. Bump the package version in `Cargo.toml` and update `Cargo.lock` to release a new version. Runs on `main` are not canceled by newer pushes, so an ongoing publication can finish.
+
 - `uci` (default): Tokio subprocess adapter. Custom `Engine` implementations work with or without this feature; disable default features to omit the adapter.
 - `fsrs` (opt-in): FSRS-6 memory scheduler. Review data types remain available without this feature.
 - `openapi`: optional schema generation with chess-prefixed type names.
