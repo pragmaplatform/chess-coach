@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.1
+
+- Add opt-in `tactics::candidate_moves` and `tactics::scan_position` for any standard-game position with its full history. Scan all legal direct piece offers, including non-best alternatives, and retain confirmed moves that remain at least equal without limiting how much advantage they give up.
+- Return independent position-scan results with best/candidate evaluations, centipawn and logistic loss, and sacrifice/trap evidence. Confirm stable offers independently of changes to the unrestricted best score. Reuse two unrestricted root searches across candidates and skip stronger searches after an initial rejection; no automatic analysis or practice integration is added.
+- Preserve the existing observation-based detector, serialized annotations, and default analysis/grading behavior. Custom engines work without the `uci` feature; add a standalone Stockfish position-scan example.
+
 ## 0.4.0
 
 - Add optional, separately scheduled sacrifice/trap verification and typed `Observation.tactics`. Historical JSON remains readable; Rust observation struct literals need `tactics: None`. Normal analysis and practice grading are unchanged.

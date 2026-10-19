@@ -9,6 +9,9 @@ use crate::{
     teaching::material_balance,
 };
 
+mod position;
+pub use position::{POSITION_DETECTOR_VERSION, PositionOpportunity, PositionScan, candidate_moves, scan_position};
+
 pub const DETECTOR_VERSION: &str = "sound-piece-offer-v1";
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -81,18 +84,7 @@ pub async fn scan(
     profiles: [EngineProfile; 2],
     engine: &mut impl Engine,
 ) -> Result<TacticalScan, Error> {
-    for profile in &profiles {
-        profile.validate()?;
-    }
-    if profiles[1].nodes <= profiles[0].nodes
-        || profiles[0].engine_name != profiles[1].engine_name
-        || profiles[0].threads != profiles[1].threads
-        || profiles[0].hash_mb != profiles[1].hash_mb
-    {
-        return Err(Error::Configuration(
-            "Tactical confirmation must use the same engine with more nodes".into(),
-        ));
-    }
+    validate_profiles(&profiles)?;
     let mut result = TacticalScan {
         detector_version: DETECTOR_VERSION.into(),
         profiles: profiles.to_vec(),
@@ -123,21 +115,9 @@ pub async fn scan(
     {
         return Ok(result);
     }
-    // Exclude routine equal exchanges/recaptures: material remains sacrificed after our reply.
-    let after_reply = game::position_after(&candidate.position, &reply.played.line[..2])?;
-    let board = game::board(&observation.decision.position)?;
-    if material_balance(&game::board(&after_reply)?, board.side_to_move())
-        > material_balance(&board, board.side_to_move()) - 2
-    {
+    let Some(motifs) = verified_motifs(&observation.decision.position, &candidate, &reply)? else {
         return Ok(result);
-    }
-    let mut motifs = vec![Motif::Sacrifice];
-    let reply_board = game::board(&candidate.position)?;
-    let best_reply = game::legal_move(&reply_board, &reply.best.best_move)?;
-    let capture = game::legal_move(&reply_board, &candidate.capture)?;
-    if best_reply.to != capture.to && loss(reply.best.score, reply.played.score) >= 0.10 {
-        motifs.push(Motif::Trap);
-    }
+    };
     result.opportunities.push(Opportunity {
         role: Role::MissedSacrifice,
         move_uci: observation.best.best_move.clone(),
@@ -152,6 +132,7 @@ pub async fn scan(
 }
 
 struct Candidate {
+    move_uci: String,
     position: Position,
     capture: String,
     piece: SacrificedPiece,
@@ -181,10 +162,13 @@ fn candidate(observation: &Observation) -> Result<Option<Candidate>, Error> {
     {
         return Ok(None);
     }
-    let position = game::position_after(
-        &observation.decision.position,
-        std::slice::from_ref(&observation.best.best_move),
-    )?;
+    move_candidate(&observation.decision.position, mv, piece)
+}
+
+fn move_candidate(root: &Position, mv: cozy_chess::Move, piece: SacrificedPiece) -> Result<Option<Candidate>, Error> {
+    let board = game::board(root)?;
+    let move_uci = util::display_uci_move(&board, mv).to_string();
+    let position = game::position_after(root, std::slice::from_ref(&move_uci))?;
     let offered = game::board(&position)?;
     let initial = material_balance(&board, board.side_to_move());
     let mut captures = Vec::new();
@@ -209,10 +193,66 @@ fn candidate(observation: &Observation) -> Result<Option<Candidate>, Error> {
     });
     // Prefer the least valuable attacker; UCI order breaks ties deterministically.
     Ok(captures.into_iter().min().map(|(_, capture)| Candidate {
+        move_uci,
         position,
         capture,
         piece,
     }))
+}
+
+fn validate_profiles(profiles: &[EngineProfile; 2]) -> Result<(), Error> {
+    for profile in profiles {
+        profile.validate()?;
+    }
+    if profiles[1].nodes <= profiles[0].nodes
+        || profiles[0].engine_name != profiles[1].engine_name
+        || profiles[0].threads != profiles[1].threads
+        || profiles[0].hash_mb != profiles[1].hash_mb
+    {
+        return Err(Error::Configuration(
+            "Tactical confirmation must use the same engine with more nodes".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn verified_motifs(
+    position: &Position,
+    candidate: &Candidate,
+    reply: &MoveEvaluation,
+) -> Result<Option<Vec<Motif>>, Error> {
+    if reply.played.line.len() < 2 {
+        return Ok(None);
+    }
+    // Exclude routine equal exchanges/recaptures: material remains sacrificed after our reply.
+    let after_reply = game::position_after(&candidate.position, &reply.played.line[..2])?;
+    let board = game::board(position)?;
+    if material_balance(&game::board(&after_reply)?, board.side_to_move())
+        > material_balance(&board, board.side_to_move()) - 2
+    {
+        return Ok(None);
+    }
+    let mut motifs = vec![Motif::Sacrifice];
+    let reply_board = game::board(&candidate.position)?;
+    let best_reply = game::legal_move(&reply_board, &reply.best.best_move)?;
+    let capture = game::legal_move(&reply_board, &candidate.capture)?;
+    if best_reply.to != capture.to && loss(reply.best.score, reply.played.score) >= 0.10 {
+        motifs.push(Motif::Trap);
+    }
+    Ok(Some(motifs))
+}
+
+fn validate_evaluation(position: &Position, root: Option<&str>, evaluation: &Evaluation) -> Result<(), Error> {
+    if evaluation.line.first() != Some(&evaluation.best_move) {
+        return Err(Error::Engine(
+            "Tactical evaluation is missing its principal variation".into(),
+        ));
+    }
+    game::normalize_line(position, &evaluation.line)?;
+    if root.is_some_and(|mv| evaluation.best_move != mv) {
+        return Err(Error::Engine("Tactical evaluation ignored the root move".into()));
+    }
+    Ok(())
 }
 
 async fn verified_comparison(
@@ -241,18 +281,8 @@ async fn checked_comparison(
         },
     )
     .await?;
-    // Validate continuations even for custom Engine implementations.
-    for evaluation in [&comparison.best, &comparison.played] {
-        if evaluation.line.first() != Some(&evaluation.best_move) {
-            return Err(Error::Engine(
-                "Tactical evaluation is missing its principal variation".into(),
-            ));
-        }
-        game::normalize_line(position, &evaluation.line)?;
-    }
-    if comparison.played.best_move != mv {
-        return Err(Error::Engine("Tactical evaluation ignored the root move".into()));
-    }
+    validate_evaluation(position, None, &comparison.best)?;
+    validate_evaluation(position, Some(mv), &comparison.played)?;
     Ok(comparison)
 }
 

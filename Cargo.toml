@@ -1,6 +1,6 @@
 [package]
 name = "chess-coach"
-version = "0.4.0"
+version = "0.4.1"
 edition = "2024"
 rust-version = "1.88"
 license = "MIT"
@@ -60,4 +60,8 @@ required-features = ["fsrs"]
 
 [[example]]
 name = "tactics"
+required-features = ["uci"]
+
+[[example]]
+name = "position_tactics"
 required-features = ["uci"]
