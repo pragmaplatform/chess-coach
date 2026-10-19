@@ -167,8 +167,34 @@ pub async fn analyze_game(
     engine: &mut impl Engine,
 ) -> Result<Vec<Observation>, Error> {
     policy.validate()?;
+    analyze_decisions(&game::decisions(game, policy.full_moves)?, policy, engine).await
+}
+
+/// Analyze only the supplied decisions, in input order, using the ordinary analysis policy.
+/// Obtain decisions with `game::decisions`, then select missing plies before calling this.
+/// Every decision is validated before any engine request; full history is retained.
+pub async fn analyze_decisions(
+    decisions: &[Decision],
+    policy: &AnalysisPolicy,
+    engine: &mut impl Engine,
+) -> Result<Vec<Observation>, Error> {
+    policy.validate()?;
+    for decision in decisions {
+        let board = game::board(&decision.position)?;
+        let mv = game::legal_move(&board, &decision.played_uci)?;
+        if usize::from(decision.ply) != decision.position.history_uci.len() + 1
+            || u32::from(decision.ply) > u32::from(policy.full_moves) * 2
+            || decision.color != board.side_to_move().into()
+            || decision.played_uci != cozy_chess::util::display_uci_move(&board, mv).to_string()
+            || decision.played_san != cozy_chess::util::display_san_move(&board, mv).to_string()
+        {
+            return Err(Error::InvalidGame(
+                "Decision does not match its history or move limit".into(),
+            ));
+        }
+    }
     let mut observations = Vec::new();
-    for decision in game::decisions(game, policy.full_moves)? {
+    for decision in decisions.iter().cloned() {
         let phase = phase::classify(&decision.position)?;
         let minimum_loss = policy.opening_threshold.map_or(policy.minimum_loss, |threshold| {
             threshold.minimum_loss(&decision.position, policy.minimum_loss)

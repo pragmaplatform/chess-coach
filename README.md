@@ -20,7 +20,7 @@ Requires Rust 1.88 or newer. Add the crate to your dependencies:
 
 ```toml
 [dependencies]
-chess-coach = "0.5.0"
+chess-coach = "0.5.1"
 ```
 
 Replay a game and extract the player's opening decisions without running an engine:
@@ -40,6 +40,8 @@ assert_eq!(decisions[0].played_uci, "e2e4");
 ```
 
 For the full pipeline, pass a `Game`, an `AnalysisPolicy`, and an `Engine` to `analysis::analyze_game`, then combine observations with `ranking::aggregate`. Use `practice::grade` to judge a submitted move and, with the `fsrs` feature, `review::FsrsScheduler` to compute its next review. Your application owns importing games, storing reports and exercises, and scheduling engine work. The runnable example below demonstrates analysis with Stockfish.
+
+To fill missing observations, call `game::decisions(&game, policy.full_moves)`, filter out saved plies, and pass the remaining decisions to `analysis::analyze_decisions(&missing, &policy, &mut engine)`. It retains complete position histories and uses the same grading, phase, and verification rules. Only supplied decisions make engine requests; an empty selection makes none. The caller owns merging the results with saved observations.
 
 The public API is pre-1.0. Persist the policy and engine profile alongside results; changing search budgets or thresholds can change the lessons generated.
 
@@ -152,7 +154,7 @@ For an `avoid_mate` exercise whose confidence is not `inconclusive`, grading als
 Enable the optional scheduler in your dependencies:
 
 ```toml
-chess-coach = { version = "0.5.0", features = ["fsrs"] }
+chess-coach = { version = "0.5.1", features = ["fsrs"] }
 ```
 
 Enable `fsrs` to use `review::FsrsScheduler`, backed by the pinned [`fsrs` 6.6.2 release](https://github.com/open-spaced-repetition/fsrs-rs/releases/tag/v6.6.2). It uses FSRS-6 defaults, a 90% desired retention target, and a maximum interval of 36,500 days. Retention is a target to validate on your users, not a guarantee. Lower the maximum interval in `FsrsConfig` if your application needs a shorter horizon. Scheduling is deterministic and uses caller-supplied UTC epoch seconds. There is no random interval fuzz or implicit system clock.

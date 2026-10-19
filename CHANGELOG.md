@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.1
+
+- Add `analysis::analyze_decisions` for selected player decisions with full history. Hosts can fill missing observations without engine requests for already analyzed moves. Whole-game analysis delegates to the same implementation; grading and phase rules are unchanged.
+
 ## 0.5.0
 
 - Add engine-free `phase::classify` for standard-game positions with history, using Lichess's material, back-rank development, and mixedness rules. Phase transitions are preserved through subsequent moves and promotions.

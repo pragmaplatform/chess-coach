@@ -134,6 +134,115 @@ async fn analysis_tags_observations_without_more_searches_or_changing_the_limit(
     );
 }
 
+#[tokio::test]
+async fn selected_decisions_match_full_analysis_and_skip_other_searches() {
+    use chess_coach::analysis::analyze_decisions;
+    let policy = AnalysisPolicy {
+        version: "selected-test".into(),
+        full_moves: 20,
+        minimum_loss: 0.05,
+        opening_threshold: None,
+        acceptable_loss: 0.02,
+        engine: EngineProfile {
+            engine_name: "fixture".into(),
+            threads: 1,
+            hash_mb: 16,
+            nodes: 100,
+            timeout_ms: 1000,
+        },
+        confirmation_nodes: 100,
+        verification_nodes: None,
+        cloud_min_depth: None,
+    };
+    for color in [Color::White, Color::Black] {
+        let game = game(color);
+        let full = analyze_game(&game, &policy, &mut FixtureEngine::default())
+            .await
+            .unwrap();
+        let selected: Vec<_> = game::decisions(&game, 20)
+            .unwrap()
+            .into_iter()
+            .filter(|decision| decision.ply == 7 || decision.ply == 8 || decision.ply > 30)
+            .collect();
+        let mut engine = FixtureEngine::default();
+        let rows = analyze_decisions(&selected, &policy, &mut engine).await.unwrap();
+        assert!(engine.requests <= selected.len() * 2);
+        assert!(
+            engine
+                .histories
+                .iter()
+                .all(|history| selected.iter().any(|d| &d.position.history_uci == history))
+        );
+        assert!(
+            selected
+                .iter()
+                .all(|d| engine.histories.contains(&d.position.history_uci))
+        );
+        let expected: Vec<_> = full
+            .into_iter()
+            .filter(|row| selected.iter().any(|d| d.ply == row.decision.ply))
+            .collect();
+        assert_eq!(
+            serde_json::to_value(rows).unwrap(),
+            serde_json::to_value(expected).unwrap()
+        );
+        let count = engine.requests;
+        assert!(analyze_decisions(&[], &policy, &mut engine).await.unwrap().is_empty());
+        assert_eq!(engine.requests, count);
+        for invalid in 0..5 {
+            let mut bad = selected.clone();
+            let last = bad.last_mut().unwrap();
+            match invalid {
+                0 => last.position.key = "invalid".into(),
+                1 => last.ply = 100,
+                2 => {
+                    last.color = if color == Color::White {
+                        Color::Black
+                    } else {
+                        Color::White
+                    }
+                }
+                3 => last.played_uci = "a1a8".into(),
+                _ => last.played_san = "invalid".into(),
+            }
+            assert!(analyze_decisions(&bad, &policy, &mut engine).await.is_err());
+            assert_eq!(engine.requests, count);
+        }
+    }
+    for moves_san in [
+        "e4 e5 Nf3 Nc6 Bc4 Nf6 O-O Be7 d3 O-O",
+        "d4 d5 Nc3 Nc6 Bf4 Bf5 Qd2 Qd7 O-O-O O-O-O",
+    ] {
+        for color in [Color::White, Color::Black] {
+            let game = Game {
+                id: "castling".into(),
+                moves_san: moves_san.into(),
+                player_color: color,
+            };
+            let castle = game::decisions(&game, 20)
+                .unwrap()
+                .into_iter()
+                .find(|decision| decision.played_san.starts_with("O-O"))
+                .unwrap();
+            let board = game::board(&castle.position).unwrap();
+            let mut nonstandard = castle.clone();
+            nonstandard.played_uci = game::legal_move(&board, &castle.played_uci).unwrap().to_string();
+            assert_ne!(nonstandard.played_uci, castle.played_uci);
+            let mut engine = FixtureEngine::default();
+            assert!(matches!(
+                analyze_decisions(&[nonstandard], &policy, &mut engine).await,
+                Err(Error::InvalidGame(_))
+            ));
+            assert_eq!(engine.requests, 0);
+            assert_eq!(
+                analyze_decisions(&[castle], &policy, &mut engine).await.unwrap().len(),
+                1
+            );
+            assert!(engine.requests > 0);
+        }
+    }
+}
+
 #[cfg(feature = "openapi")]
 #[test]
 fn phase_schema_and_serialization_use_the_same_names() {
@@ -163,12 +272,14 @@ fn game(color: Color) -> Game {
 #[derive(Default)]
 struct FixtureEngine {
     requests: usize,
+    histories: Vec<Vec<String>>,
 }
 
 #[async_trait::async_trait]
 impl Engine for FixtureEngine {
     async fn evaluate(&mut self, request: &EvaluationRequest) -> Result<Evaluation, Error> {
         self.requests += 1;
+        self.histories.push(request.position.history_uci.clone());
         let board = game::board(&request.position)?;
         let mut legal = Vec::new();
         board.generate_moves(|moves| {
