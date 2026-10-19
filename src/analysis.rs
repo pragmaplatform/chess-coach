@@ -6,6 +6,7 @@ use crate::{
         Engine, EngineProfile, Evaluation, EvaluationConfidence, EvaluationRequest, cloud_move, evaluate_move, loss,
     },
     game::{self, Decision, Game, Position},
+    phase::{self, Phase},
     teaching::{self, Teaching, Theme},
 };
 
@@ -136,6 +137,9 @@ impl Severity {
 #[cfg_attr(feature = "openapi", schema(as = ChessObservation))]
 pub struct Observation {
     pub decision: Decision,
+    /// Phase before the player's move; absent in observations saved before classification.
+    #[serde(default)]
+    pub phase: Option<Phase>,
     pub best: Evaluation,
     pub played: Evaluation,
     pub profile: EngineProfile,
@@ -165,6 +169,7 @@ pub async fn analyze_game(
     policy.validate()?;
     let mut observations = Vec::new();
     for decision in game::decisions(game, policy.full_moves)? {
+        let phase = phase::classify(&decision.position)?;
         let minimum_loss = policy.opening_threshold.map_or(policy.minimum_loss, |threshold| {
             threshold.minimum_loss(&decision.position, policy.minimum_loss)
         });
@@ -222,6 +227,7 @@ pub async fn analyze_game(
             .is_some_and(|threshold| threshold.excludes_non_mating(&decision.position));
         observations.push(Observation {
             decision,
+            phase: Some(phase),
             best: comparison.best,
             played: comparison.played,
             profile: request.profile,

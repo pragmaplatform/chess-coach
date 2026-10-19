@@ -8,6 +8,8 @@ pub mod engine;
 pub mod game;
 /// Opening-family classification from SAN move lists.
 pub mod openings;
+/// History-aware opening, middlegame, and endgame classification without an engine.
+pub mod phase;
 /// Single-move grading and follow-up positions.
 pub mod practice;
 /// Weakness aggregation and practice prioritization.

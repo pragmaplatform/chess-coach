@@ -330,6 +330,7 @@ mod tests {
             mistake: true,
             cloud_evaluations: None,
             tactics: None,
+            phase: None,
         };
         assert_eq!(candidate(&observation).unwrap().unwrap().capture, "e6d5");
     }

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.0
+
+- Add engine-free `phase::classify` for standard-game positions with history, using Lichess's material, back-rank development, and mixedness rules. Phase transitions are preserved through subsequent moves and promotions.
+- Tag new analysis observations with the position's phase before the player's move. Older JSON without `phase` reads as `None`; existing Rust `Observation` literals must supply `phase`. Weakness examples retain the tag.
+- Keep analysis move limits, lesson eligibility, grading thresholds, scheduling, and engine requests unchanged. No backend filters or client integration are included.
+
 ## 0.4.1
 
 - Add opt-in `tactics::candidate_moves` and `tactics::scan_position` for any standard-game position with its full history. Scan all legal direct piece offers, including non-best alternatives, and retain confirmed moves that remain at least equal without limiting how much advantage they give up.
